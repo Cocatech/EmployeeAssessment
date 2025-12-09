@@ -94,3 +94,160 @@ export async function deleteAssessment(id: string) {
     return { success: false, error: 'Failed to delete assessment' };
   }
 }
+
+/**
+ * Submit assessment with Smart Skip Logic and Auto Email Resolution
+ * Determines next approver and automatically resolves their email
+ */
+export async function submitAssessment(
+  assessmentId: string,
+  currentStatus: string,
+  empCode: string
+) {
+  try {
+    const { getEmployeeByCode, getEmployeeEmail } = await import('@/lib/graph/sharepoint');
+    
+    // Fetch employee profile
+    const employee = await getEmployeeByCode(empCode);
+    
+    if (!employee) {
+      return { success: false, error: 'Employee not found' };
+    }
+
+    let nextStatus: string;
+    let targetId: string;
+    let targetEmail: string | null;
+
+    // Determine next status and target approver based on current status
+    switch (currentStatus) {
+      case 'DRAFT':
+        // First submission -> Manager (Approver1)
+        nextStatus = 'SUBMITTED_MGR';
+        targetId = employee.approver1_ID;
+        break;
+
+      case 'SUBMITTED_MGR':
+        // Smart Skip Logic: Check if Approver2 exists
+        if (employee.approver2_ID && employee.approver2_ID !== '-' && employee.approver2_ID.trim() !== '') {
+          // Has Approver2 -> Send to Approver2
+          nextStatus = 'SUBMITTED_APPR2';
+          targetId = employee.approver2_ID;
+        } else {
+          // No Approver2 -> Skip to GM
+          nextStatus = 'SUBMITTED_GM';
+          targetId = employee.gm_ID;
+        }
+        break;
+
+      case 'SUBMITTED_APPR2':
+        // From Approver2 -> GM
+        nextStatus = 'SUBMITTED_GM';
+        targetId = employee.gm_ID;
+        break;
+
+      case 'SUBMITTED_GM':
+        // GM approval -> Complete
+        nextStatus = 'COMPLETED';
+        targetId = empCode; // Back to employee
+        break;
+
+      default:
+        return { success: false, error: 'Invalid status transition' };
+    }
+
+    // Auto Email Resolution: Get target approver's email
+    if (nextStatus === 'COMPLETED') {
+      targetEmail = employee.email;
+    } else {
+      targetEmail = await getEmployeeEmail(targetId);
+    }
+
+    if (!targetEmail) {
+      console.warn(`Email not found for target: ${targetId}`);
+      // Continue anyway, email might be resolved later
+    }
+
+    // Update assessment in SharePoint
+    await updateListItem(ASSESSMENTS_LIST, assessmentId, {
+      Status: nextStatus,
+      Current_Assignee_Email: targetEmail,
+      LastUpdated: new Date().toISOString(),
+    });
+
+    revalidatePath('/dashboard/assessments');
+    
+    return {
+      success: true,
+      nextStatus,
+      targetEmail,
+      message: `Assessment submitted to ${nextStatus}`,
+    };
+  } catch (error) {
+    console.error('Error submitting assessment:', error);
+    return { success: false, error: 'Failed to submit assessment' };
+  }
+}
+
+/**
+ * Reject assessment and send back to previous stage
+ */
+export async function rejectAssessment(
+  assessmentId: string,
+  currentStatus: string,
+  empCode: string,
+  reason?: string
+) {
+  try {
+    const { getEmployeeByCode, getEmployeeEmail } = await import('@/lib/graph/sharepoint');
+    
+    const employee = await getEmployeeByCode(empCode);
+    
+    if (!employee) {
+      return { success: false, error: 'Employee not found' };
+    }
+
+    let previousStatus: string;
+    let targetEmail: string | null;
+
+    switch (currentStatus) {
+      case 'SUBMITTED_MGR':
+        previousStatus = 'DRAFT';
+        targetEmail = employee.email;
+        break;
+      case 'SUBMITTED_APPR2':
+        previousStatus = 'SUBMITTED_MGR';
+        targetEmail = await getEmployeeEmail(employee.approver1_ID);
+        break;
+      case 'SUBMITTED_GM':
+        // Check if came from Approver2 or Manager
+        if (employee.approver2_ID && employee.approver2_ID !== '-') {
+          previousStatus = 'SUBMITTED_APPR2';
+          targetEmail = await getEmployeeEmail(employee.approver2_ID);
+        } else {
+          previousStatus = 'SUBMITTED_MGR';
+          targetEmail = await getEmployeeEmail(employee.approver1_ID);
+        }
+        break;
+      default:
+        return { success: false, error: 'Cannot reject from this status' };
+    }
+
+    await updateListItem(ASSESSMENTS_LIST, assessmentId, {
+      Status: previousStatus,
+      Current_Assignee_Email: targetEmail,
+      RejectionReason: reason || '',
+      LastUpdated: new Date().toISOString(),
+    });
+
+    revalidatePath('/dashboard/assessments');
+    
+    return {
+      success: true,
+      previousStatus,
+      message: `Assessment rejected and sent back`,
+    };
+  } catch (error) {
+    console.error('Error rejecting assessment:', error);
+    return { success: false, error: 'Failed to reject assessment' };
+  }
+}

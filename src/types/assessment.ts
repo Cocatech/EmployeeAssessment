@@ -2,7 +2,14 @@
  * Assessment type definitions
  */
 
-export type AssessmentStatus = 'draft' | 'pending' | 'in_progress' | 'completed' | 'approved';
+export type AssessmentStatus = 
+  | 'DRAFT' 
+  | 'SUBMITTED_MGR' 
+  | 'SUBMITTED_APPR2' 
+  | 'SUBMITTED_GM' 
+  | 'COMPLETED' 
+  | 'REJECTED';
+
 export type AssessmentType = 'self' | 'manager' | 'peer' | '360';
 
 export interface Assessment {
@@ -45,4 +52,32 @@ export interface AssessmentSummary {
   completedAssessments: number;
   pendingAssessments: number;
   averageScore: number;
+}
+
+/**
+ * KPI Item for Score Table
+ */
+export interface KPIItem {
+  id: string;
+  topic: string;
+  weight: number;
+  scoreSelf?: number;
+  scoreMgr?: number;
+  scoreAppr2?: number;
+  scoreGm?: number;
+  commentSelf?: string;
+  commentMgr?: string;
+  commentGm?: string;
+}
+
+/**
+ * Enhanced Assessment with Approver workflow
+ */
+export interface AssessmentWorkflow {
+  currentAssigneeEmail: string | null;
+  approver1Email?: string;
+  approver2Email?: string;
+  gmEmail?: string;
+  submittedAt?: string;
+  approvedAt?: string;
 }
