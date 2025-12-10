@@ -99,7 +99,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmit}
         title={editingItem ? 'Edit Group' : 'Add Group'}
-        initialData={editingItem || undefined}
+        initialData={editingItem ? { ...editingItem, description: editingItem.description || undefined } : undefined}
         fields={{
           code: true,
           name: true,

@@ -30,7 +30,7 @@ export default async function DelegationDetailPage({
 
   // Get delegation
   const delegations = await getDelegations();
-  const delegation = delegations.find((d) => d.id === parseInt(params.id));
+  const delegation = delegations.find((d) => d.id === params.id);
 
   if (!delegation) {
     notFound();

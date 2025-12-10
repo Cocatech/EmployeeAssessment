@@ -46,8 +46,8 @@ export default function NewDelegationForm({ employees }: NewDelegationFormProps)
       const result = await createDelegation({
         delegateeId: formData.delegateeId,
         permission: formData.permission,
-        startDate: start,
-        endDate: end,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
         reason: formData.reason || undefined,
       });
 

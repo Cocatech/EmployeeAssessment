@@ -103,6 +103,7 @@ export function EmployeeForm({
       gm_ID: formData.get('gm_ID') as string,
       joinDate: formData.get('joinDate') as string,
       warningCount: 0,
+      isActive: true,
     };
 
     try {

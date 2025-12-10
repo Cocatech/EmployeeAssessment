@@ -45,6 +45,13 @@ export default async function SettingsPage() {
       href: '/dashboard/settings/teams',
       color: 'bg-purple-500',
     },
+    {
+      title: 'Assessment Types',
+      description: 'Manage assessment period types (Annual, Mid-year, etc.)',
+      icon: Settings,
+      href: '/dashboard/settings/assessment-types',
+      color: 'bg-orange-500',
+    },
   ];
 
   return (

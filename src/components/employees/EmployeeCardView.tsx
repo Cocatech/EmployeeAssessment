@@ -283,29 +283,29 @@ export function EmployeeCardView({ employees }: EmployeeCardViewProps) {
               </div>
 
               {/* Approvers */}
-              {(selectedEmployee.approver1_Code || selectedEmployee.approver2_Code || selectedEmployee.approver3_Code) && (
+              {(selectedEmployee.approver1_ID || selectedEmployee.approver2_ID || selectedEmployee.approver3_ID) && (
                 <div>
                   <h3 className="text-sm font-semibold text-muted-foreground mb-3">Approval Chain</h3>
                   <div className="space-y-2">
-                    {selectedEmployee.approver1_Code && (
+                    {selectedEmployee.approver1_ID && (
                       <div className="flex items-center gap-2 text-sm">
                         <Shield className="h-4 w-4 text-blue-600" />
                         <span className="text-muted-foreground">Manager:</span>
-                        <span className="font-medium">{selectedEmployee.approver1_Code}</span>
+                        <span className="font-medium">{selectedEmployee.approver1_ID}</span>
                       </div>
                     )}
-                    {selectedEmployee.approver2_Code && (
+                    {selectedEmployee.approver2_ID && (
                       <div className="flex items-center gap-2 text-sm">
                         <Shield className="h-4 w-4 text-purple-600" />
                         <span className="text-muted-foreground">Approver 2:</span>
-                        <span className="font-medium">{selectedEmployee.approver2_Code}</span>
+                        <span className="font-medium">{selectedEmployee.approver2_ID}</span>
                       </div>
                     )}
-                    {selectedEmployee.approver3_Code && (
+                    {selectedEmployee.approver3_ID && (
                       <div className="flex items-center gap-2 text-sm">
                         <Shield className="h-4 w-4 text-green-600" />
                         <span className="text-muted-foreground">General Manager:</span>
-                        <span className="font-medium">{selectedEmployee.approver3_Code}</span>
+                        <span className="font-medium">{selectedEmployee.approver3_ID}</span>
                       </div>
                     )}
                   </div>
@@ -323,27 +323,8 @@ export function EmployeeCardView({ employees }: EmployeeCardViewProps) {
                       <p className="font-medium">{formatDate(selectedEmployee.joinDate)}</p>
                     </div>
                   </div>
-                  {selectedEmployee.resignDate && (
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-1">Resign Date</p>
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-muted-foreground" />
-                        <p className="font-medium">{formatDate(selectedEmployee.resignDate)}</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
-
-              {/* Remarks */}
-              {selectedEmployee.remark && (
-                <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">Remarks</h3>
-                  <p className="text-sm text-muted-foreground bg-gray-50 p-3 rounded">
-                    {selectedEmployee.remark}
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Modal Footer */}

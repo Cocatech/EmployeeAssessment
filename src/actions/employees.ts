@@ -32,6 +32,7 @@ export async function getEmployees(params?: {
       gm_ID: emp.gm_ID || '',
       joinDate: emp.joinDate.toISOString(),
       warningCount: emp.warningCount,
+      isActive: emp.isActive,
     }));
   } catch (error) {
     console.error('Error fetching employees:', error);
@@ -68,6 +69,7 @@ export async function getEmployee(empCode: string) {
       gm_ID: emp.gm_ID || '',
       joinDate: emp.joinDate.toISOString(),
       warningCount: emp.warningCount,
+      isActive: emp.isActive,
     };
     
     return { success: true, data: employee };
@@ -182,6 +184,7 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
     if (data.gm_ID !== undefined) updateData.gm_ID = data.gm_ID || null;
     if (data.joinDate !== undefined) updateData.joinDate = new Date(data.joinDate);
     if (data.warningCount !== undefined) updateData.warningCount = data.warningCount;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
 
     await prisma.employee.update({
       where: { empCode },

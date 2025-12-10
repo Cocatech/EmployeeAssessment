@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateAssessment } from '@/actions/assessments';
 import { getAssessments } from '@/actions/assessments';
-import { calculateAssessmentScore } from '@/actions/responses';
+// Legacy route - use new workflow actions instead
+// import { calculateAssessmentScore } from '@/actions/responses';
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,34 +42,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'approve') {
-      // Calculate scores
-      const scores = await calculateAssessmentScore(assessmentId);
-
-      // Update assessment with new status and scores
+      // Legacy route - Use new workflow actions instead
+      // TODO: Migrate to use approveAssessment from @/actions/assessments
+      
       const updateData: any = {
-        status: nextStatus,
-        updatedAt: new Date().toISOString(),
+        status: nextStatus || 'Completed',
+        approvedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
       };
-
-      // Update score based on current status
-      if (assessment.status === 'SUBMITTED_MGR') {
-        updateData.score = scores.managerScore;
-      } else if (assessment.status === 'SUBMITTED_APPR2') {
-        updateData.score = scores.approver2Score;
-      } else if (assessment.status === 'SUBMITTED_APPR3') {
-        updateData.score = scores.approver3Score;
-      } else if (assessment.status === 'SUBMITTED_GM') {
-        updateData.finalScore = scores.finalScore;
-        updateData.approvedAt = new Date().toISOString();
-      }
 
       const updated = await updateAssessment(assessmentId, updateData);
 
       return NextResponse.json({ 
         success: true, 
-        message: 'Assessment approved',
+        message: 'Assessment approved (legacy)',
         assessment: updated,
-        scores 
       });
     }
 

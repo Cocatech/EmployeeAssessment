@@ -23,6 +23,20 @@ async function main() {
   await prisma.team.deleteMany();
   await prisma.group.deleteMany();
   await prisma.position.deleteMany();
+  await prisma.assessmentType.deleteMany();
+
+  // Seed Assessment Types
+  console.log('📋 Seeding assessment types...');
+  const assessmentTypes = [
+    { code: 'ANNUAL', name: 'Annual', description: 'Annual performance review', sortOrder: 1 },
+    { code: 'MID_YEAR', name: 'Mid-year', description: 'Mid-year performance review', sortOrder: 2 },
+    { code: 'PROBATION', name: 'Probation', description: 'Probation period assessment', sortOrder: 3 },
+    { code: 'SPECIAL', name: 'Special', description: 'Special assessment', sortOrder: 4 },
+  ];
+
+  for (const assessmentType of assessmentTypes) {
+    await prisma.assessmentType.create({ data: assessmentType });
+  }
 
   // Seed Positions
   console.log('💼 Seeding positions...');

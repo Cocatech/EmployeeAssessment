@@ -1,0 +1,293 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { QuestionBuilder, Question } from './QuestionBuilder';
+import { Save, Send } from 'lucide-react';
+import { createAssessmentDraft, assignAssessmentToEmployees } from '@/actions/assessments';
+import { ASSESSMENT_LEVELS } from '@/lib/assessment-levels';
+
+interface AssessmentType {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+}
+
+interface AssessmentCreationFormProps {
+  assessorId: string;
+  assessmentTypes: AssessmentType[];
+}
+
+export function AssessmentCreationForm({ assessorId, assessmentTypes }: AssessmentCreationFormProps) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [assessmentId, setAssessmentId] = useState<string | null>(null);
+  
+  // Filter only active assessment types
+  const activeAssessmentTypes = assessmentTypes.filter(type => type.isActive);
+
+  const handleSaveDraft = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError('');
+    setSuccess('');
+
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      title: formData.get('title') as string,
+      description: formData.get('description') as string,
+      assessmentType: formData.get('assessmentType') as string,
+      targetLevel: formData.get('targetLevel') as string,
+      periodStart: new Date(formData.get('periodStart') as string),
+      periodEnd: new Date(formData.get('periodEnd') as string),
+      dueDate: new Date(formData.get('dueDate') as string),
+      assessorId,
+    };
+
+    if (!data.title || !data.assessmentType || !data.targetLevel) {
+      setError('Please fill in all required fields');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (questions.length === 0) {
+      setError('Please add at least one question');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
+    if (totalWeight !== 100) {
+      setError(`Total question weight must equal 100% (currently ${totalWeight}%)`);
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const result = await createAssessmentDraft(data);
+
+      if (result.success && result.id) {
+        setAssessmentId(result.id);
+        setSuccess('Assessment draft saved successfully! You can now assign it to employees.');
+        
+        // TODO: Save questions to database
+        // This would require creating AssessmentQuestion records
+        
+      } else {
+        setError(result.error || 'Failed to save draft');
+      }
+    } catch (err) {
+      setError('An error occurred while saving');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAssignToEmployees = async () => {
+    if (!assessmentId) {
+      setError('Please save draft first');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const result = await assignAssessmentToEmployees(assessmentId);
+
+      if (result.success) {
+        setSuccess(`Assessment assigned to ${result.count} employees successfully!`);
+        setTimeout(() => {
+          router.push('/dashboard/assessments');
+        }, 2000);
+      } else {
+        setError(result.error || 'Failed to assign assessment');
+      }
+    } catch (err) {
+      setError('An error occurred while assigning');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSaveDraft} className="space-y-6">
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+          {success}
+        </div>
+      )}
+
+      {/* Basic Information */}
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold mb-4">Basic Information</h2>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="title" className="text-sm font-medium">
+              Assessment Title <span className="text-red-500">*</span>
+            </label>
+            <Input
+              id="title"
+              name="title"
+              placeholder="e.g., Annual Performance Review 2025"
+              required
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="description" className="text-sm font-medium">
+              Description
+            </label>
+            <textarea
+              id="description"
+              name="description"
+              rows={3}
+              placeholder="Optional description"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="assessmentType" className="text-sm font-medium">
+                Assessment Type <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="assessmentType"
+                name="assessmentType"
+                required
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                disabled={isSubmitting}
+              >
+                <option value="">Select Type</option>
+                {activeAssessmentTypes.map((type) => (
+                  <option key={type.id} value={type.name}>
+                    {type.name} {type.description ? `(${type.description})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="targetLevel" className="text-sm font-medium">
+                Target Level <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="targetLevel"
+                name="targetLevel"
+                required
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                disabled={isSubmitting}
+              >
+                <option value="">Select Level</option>
+                {ASSESSMENT_LEVELS.map((level) => (
+                  <option key={level.code} value={level.code}>
+                    {level.code} - {level.name} ({level.description})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="periodStart" className="text-sm font-medium">
+                Period Start <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="periodStart"
+                name="periodStart"
+                type="date"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="periodEnd" className="text-sm font-medium">
+                Period End <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="periodEnd"
+                name="periodEnd"
+                type="date"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="dueDate" className="text-sm font-medium">
+                Due Date <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="dueDate"
+                name="dueDate"
+                type="date"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Questions */}
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold mb-4">Assessment Questions</h2>
+        <QuestionBuilder
+          questions={questions}
+          onChange={setQuestions}
+          disabled={isSubmitting}
+        />
+      </Card>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-end gap-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => router.push('/dashboard/assessments')}
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+
+        <Button type="submit" disabled={isSubmitting || !!assessmentId}>
+          <Save className="w-4 h-4 mr-2" />
+          {isSubmitting ? 'Saving...' : 'Save as Draft'}
+        </Button>
+
+        {assessmentId && (
+          <Button
+            type="button"
+            onClick={handleAssignToEmployees}
+            disabled={isSubmitting}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            <Send className="w-4 h-4 mr-2" />
+            {isSubmitting ? 'Assigning...' : 'Assign to Employees'}
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+}

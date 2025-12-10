@@ -85,13 +85,17 @@ export async function createResponse(data: Omit<AssessmentResponse, 'id' | 'crea
       data: {
         assessmentId: data.assessmentId,
         questionId: data.questionId,
+        questionTitle: data.questionTitle || '',
+        questionWeight: data.questionWeight || 0,
         scoreSelf: data.scoreSelf || null,
         scoreMgr: data.scoreMgr || null,
         scoreAppr2: data.scoreAppr2 || null,
+        scoreAppr3: (data as any).scoreAppr3 || null,
         scoreGm: data.scoreGm || null,
         commentSelf: data.commentSelf || null,
         commentMgr: data.commentMgr || null,
         commentAppr2: data.commentAppr2 || null,
+        commentAppr3: (data as any).commentAppr3 || null,
         commentGm: data.commentGm || null,
       },
     });
@@ -167,6 +171,8 @@ export async function saveResponses(
   assessmentId: string,
   responses: Array<{
     questionId: string;
+    questionTitle: string;
+    questionWeight: number;
     scoreSelf?: number | null;
     commentSelf?: string | null;
     scoreMgr?: number | null;
@@ -191,12 +197,16 @@ export async function saveResponses(
           create: {
             assessmentId,
             questionId: response.questionId,
+            questionTitle: response.questionTitle || '',
+            questionWeight: response.questionWeight || 0,
             scoreSelf: response.scoreSelf || null,
             commentSelf: response.commentSelf || null,
             scoreMgr: response.scoreMgr || null,
             commentMgr: response.commentMgr || null,
             scoreAppr2: response.scoreAppr2 || null,
             commentAppr2: response.commentAppr2 || null,
+            scoreAppr3: (response as any).scoreAppr3 || null,
+            commentAppr3: (response as any).commentAppr3 || null,
             scoreGm: response.scoreGm || null,
             commentGm: response.commentGm || null,
           },
@@ -207,6 +217,8 @@ export async function saveResponses(
             commentMgr: response.commentMgr !== undefined ? response.commentMgr : undefined,
             scoreAppr2: response.scoreAppr2 !== undefined ? response.scoreAppr2 : undefined,
             commentAppr2: response.commentAppr2 !== undefined ? response.commentAppr2 : undefined,
+            scoreAppr3: (response as any).scoreAppr3 !== undefined ? (response as any).scoreAppr3 : undefined,
+            commentAppr3: (response as any).commentAppr3 !== undefined ? (response as any).commentAppr3 : undefined,
             scoreGm: response.scoreGm !== undefined ? response.scoreGm : undefined,
             commentGm: response.commentGm !== undefined ? response.commentGm : undefined,
           },

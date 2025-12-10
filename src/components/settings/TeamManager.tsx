@@ -101,7 +101,7 @@ export function TeamManager({ teams, groups }: TeamManagerProps) {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmit}
         title={editingItem ? 'Edit Team' : 'Add Team'}
-        initialData={editingItem || undefined}
+        initialData={editingItem ? { ...editingItem, description: editingItem.description || undefined, groupCode: editingItem.groupCode || undefined } : undefined}
         fields={{
           code: true,
           name: true,

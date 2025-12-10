@@ -29,14 +29,14 @@ export async function getQuestions(params?: {
 
     return questions.map((q) => ({
       id: q.id,
-      questionTitle: q.questionText,
+      questionTitle: q.questionTitle,
       description: q.description || '',
       category: q.category as AssessmentQuestion['category'],
       weight: q.weight,
       maxScore: q.maxScore,
-      order: q.questionOrder,
+      order: q.order,
       isActive: q.isActive,
-      applicableLevel: q.assessmentLevel as AssessmentQuestion['applicableLevel'],
+      applicableLevel: q.applicableLevel as AssessmentQuestion['applicableLevel'],
       createdAt: q.createdAt.toISOString(),
       updatedAt: q.updatedAt.toISOString(),
     }));

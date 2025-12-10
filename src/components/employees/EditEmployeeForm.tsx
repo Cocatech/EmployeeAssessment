@@ -88,19 +88,19 @@ export function EditEmployeeForm({
     const formData = new FormData(e.currentTarget);
     const data = {
       empName_Eng: formData.get('empName_Eng') as string,
-      empName_Thai: formData.get('empName_Thai') as string || null,
-      email: formData.get('email') as string || null,
-      phoneNumber: formData.get('phoneNumber') as string || null,
+      empName_Thai: formData.get('empName_Thai') as string || undefined,
+      email: formData.get('email') as string || undefined,
+      phoneNumber: formData.get('phoneNumber') as string || undefined,
       profileImage: profileImage,
       position: formData.get('position') as string,
       group: selectedGroups.join(','),
-      team: selectedTeams.length > 0 ? selectedTeams.join(',') : null,
+      team: selectedTeams.length > 0 ? selectedTeams.join(',') : undefined,
       assessmentLevel: formData.get('assessmentLevel') as string,
-      employeeType: formData.get('employeeType') as string,
-      approver1_ID: formData.get('approver1_ID') as string || null,
-      approver2_ID: formData.get('approver2_ID') as string || null,
-      approver3_ID: formData.get('approver3_ID') as string || null,
-      gm_ID: formData.get('gm_ID') as string || null,
+      employeeType: formData.get('employeeType') as 'Permanent' | 'Temporary',
+      approver1_ID: formData.get('approver1_ID') as string || undefined,
+      approver2_ID: formData.get('approver2_ID') as string || undefined,
+      approver3_ID: formData.get('approver3_ID') as string || undefined,
+      gm_ID: formData.get('gm_ID') as string || undefined,
       isActive: formData.get('isActive') === 'true',
     };
 

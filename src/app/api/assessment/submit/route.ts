@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // อัปเดตสถานะ
     const updated = await updateAssessment(assessmentId, {
-      status: nextStatus,
+      status: nextStatus as any,
       submittedAt: new Date().toISOString(),
     });
 

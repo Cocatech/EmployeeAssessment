@@ -9,10 +9,10 @@ import { revokeDelegation, deleteDelegation } from '@/actions/delegations';
 
 interface DelegationActionsProps {
   delegation: {
-    id: number;
+    id: string;
     isActive: boolean;
-    startDate: Date;
-    endDate: Date;
+    startDate: string | Date;
+    endDate: string | Date;
   };
 }
 

@@ -24,7 +24,7 @@ model Employee {
   position        String
   group           String   // e.g., "PRD,QA"
   team            String?
-  assessmentLevel String   // Management, Supervise, Operate, Interpreter, General
+  assessmentLevel String   // L1-Supplier, L2-Operator, L3-General, L4-Supervise, L5-Interpreter, L6-Management
   employeeType    String   // Permanent, Temporary
   approver1_ID    String?  // Manager
   approver2_ID    String?  // Approver 2
@@ -60,7 +60,7 @@ model AssessmentQuestion {
   maxScore        Float    @default(5)
   order           Int      // Display order
   isActive        Boolean  @default(true)
-  applicableLevel String   // Management, Supervise, Operate, All, etc.
+  applicableLevel String   // L1-Supplier, L2-Operator, L3-General, L4-Supervise, L5-Interpreter, L6-Management, All
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -82,17 +82,49 @@ model Assessment {
   title           String?
   description     String?
   assessmentType  String   // Annual, Probation, Mid-Year, etc.
-  status          String   // DRAFT, SUBMITTED_MGR, SUBMITTED_APPR2, SUBMITTED_APPR3, SUBMITTED_GM, COMPLETED, REJECTED
+  status          String   // Draft, Assigned, InProgress, PendingApprover1, PendingApprover2, PendingApprover3, PendingManager, PendingMD, Completed, Rejected
   employeeId      String   // Foreign key to Employee.empCode
-  assessorId      String?  // Who created the assessment
+  assessorId      String?  // Who created the assessment (Admin)
+  targetLevel     String?  // L1-L6 (which level this assessment is for)
+  isDraft         Boolean  @default(true)
+  currentStage    String?  // Who is it waiting for? (empCode)
+  rejectionStage  String?  // If rejected, from which stage?
+  rejectionReason String?  @db.Text
+  
+  // Dates
   periodStart     DateTime
   periodEnd       DateTime
   dueDate         DateTime
+  assignedAt      DateTime?
   submittedAt     DateTime?
   approvedAt      DateTime?
   completedAt     DateTime?
+  
+  // Approval Tracking
+  approver1Status String?  // Pending, Approved, Rejected
+  approver1Date   DateTime?
+  approver1Note   String?  @db.Text
+  
+  approver2Status String?  // Pending, Approved, Rejected
+  approver2Date   DateTime?
+  approver2Note   String?  @db.Text
+  
+  approver3Status String?  // Pending, Approved, Rejected
+  approver3Date   DateTime?
+  approver3Note   String?  @db.Text
+  
+  managerStatus   String?  // Pending, Approved, Rejected
+  managerDate     DateTime?
+  managerNote     String?  @db.Text
+  
+  mdStatus        String?  // Pending, Approved, Rejected
+  mdDate          DateTime?
+  mdNote          String?  @db.Text
+  
+  // Scores
   score           Float?   // Current/interim score
   finalScore      Float?   // Final approved score
+  
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -264,4 +296,38 @@ model Team {
   @@index([groupCode])
   @@index([sortOrder])
   @@map("teams")
+}
+
+model AssessmentType {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+  @@index([sortOrder])
+  @@map("assessment_types")
+}
+
+// ============================================
+// Notification Model
+// ============================================
+model Notification {
+  id           String   @id @default(cuid())
+  userId       String   // Employee.empCode who receives notification
+  type         String   // AssessmentAssigned, ApprovalRequired, Rejected, Approved, Completed
+  title        String
+  message      String   @db.Text
+  assessmentId String?  // Related assessment if applicable
+  link         String?  // URL to navigate to
+  isRead       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
 }

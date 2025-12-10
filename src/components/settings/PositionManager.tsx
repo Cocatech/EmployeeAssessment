@@ -99,7 +99,7 @@ export function PositionManager({ positions }: PositionManagerProps) {
         onClose={() => setIsModalOpen(false)}
         onSubmit={handleSubmit}
         title={editingItem ? 'Edit Position' : 'Add Position'}
-        initialData={editingItem || undefined}
+        initialData={editingItem ? { ...editingItem, description: editingItem.description || undefined } : undefined}
         fields={{
           code: true,
           name: true,

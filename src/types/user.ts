@@ -38,6 +38,7 @@ export interface Employee {
   gm_ID: string;
   joinDate: string; // YYYY-MM-DD format
   warningCount: number;
+  isActive: boolean;
 }
 
 /**
