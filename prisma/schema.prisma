@@ -26,10 +26,11 @@ model Employee {
   team            String?
   assessmentLevel String   // L1-Supplier, L2-Operator, L3-General, L4-Supervise, L5-Interpreter, L6-Management
   employeeType    String   // Permanent, Temporary
-  approver1_ID    String?  // Manager
+  approver1_ID    String?  // Approver 1
   approver2_ID    String?  // Approver 2
   approver3_ID    String?  // Approver 3
-  gm_ID           String?  // GM
+  manager_ID      String?  // Manager (Applied by Manager)
+  gm_ID           String?  // GM (Confirmed by GM)
   joinDate        DateTime
   warningCount    Int      @default(0)
   isActive        Boolean  @default(true)
@@ -152,16 +153,18 @@ model AssessmentResponse {
   
   // Scores from different roles (0-5 scale)
   scoreSelf       Float?
-  scoreMgr        Float?   // Manager score
+  scoreAppr1      Float?   // Approver 1 score
   scoreAppr2      Float?   // Approver 2 score
   scoreAppr3      Float?   // Approver 3 score
-  scoreGm         Float?   // GM score
+  scoreMgr        Float?   // Manager score (Applied by Manager)
+  scoreGm         Float?   // GM score (Confirmed by GM)
   
   // Comments from different roles
   commentSelf     String?  @db.Text
-  commentMgr      String?  @db.Text
+  commentAppr1    String?  @db.Text
   commentAppr2    String?  @db.Text
   commentAppr3    String?  @db.Text
+  commentMgr      String?  @db.Text
   commentGm       String?  @db.Text
   
   createdAt       DateTime @default(now())

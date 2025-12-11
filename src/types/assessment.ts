@@ -2,14 +2,16 @@
  * Assessment type definitions
  */
 
-export type AssessmentStatus = 
-  | 'DRAFT' 
-  | 'SUBMITTED_MGR' 
-  | 'SUBMITTED_APPR2' 
-  | 'SUBMITTED_APPR3' 
-  | 'SUBMITTED_GM' 
-  | 'COMPLETED' 
+export type AssessmentStatus =
+  | 'DRAFT'
+  | 'SUBMITTED_APPR1'
+  | 'SUBMITTED_APPR2'
+  | 'SUBMITTED_APPR3'
+  | 'SUBMITTED_MGR'
+  | 'SUBMITTED_GM'
+  | 'COMPLETED'
   | 'REJECTED';
+
 
 export type AssessmentType = 'self' | 'manager' | 'peer' | '360';
 
@@ -21,11 +23,11 @@ export type AssessmentType = 'self' | 'manager' | 'peer' | '360';
  * - Supervise: หัวหน้างาน/ซุปเปอร์ไวเซอร์ (Level 4-5)
  * - Management: ผู้จัดการ/ผู้บริหาร (Level 6+)
  */
-export type AssessmentLevel = 
-  | 'General' 
-  | 'Interpreter' 
-  | 'Operate' 
-  | 'Supervise' 
+export type AssessmentLevel =
+  | 'General'
+  | 'Interpreter'
+  | 'Operate'
+  | 'Supervise'
   | 'Management';
 
 /**
@@ -36,7 +38,7 @@ export type ApplicableLevel = AssessmentLevel | 'All';
 /**
  * Question Category - หมวดหมู่คำถาม
  */
-export type QuestionCategory = 
+export type QuestionCategory =
   | 'Performance'      // ผลการปฏิบัติงาน
   | 'Quality'          // คุณภาพงาน
   | 'Behavior'         // พฤติกรรม
@@ -84,6 +86,7 @@ export interface AssessmentQuestion {
   updatedAt?: string;
 }
 
+
 export interface AssessmentResponse {
   id: string;
   assessmentId: string;
@@ -91,15 +94,18 @@ export interface AssessmentResponse {
   questionTitle?: string; // For easy reference
   questionWeight?: number; // For easy calculation
   scoreSelf?: number; // Employee self-score (0-5)
+  scoreAppr1?: number; // Approver 1 score (0-5)
+  scoreAppr2?: number; // Approver 2 score (0-5)
+  scoreAppr3?: number; // Approver 3 score (0-5)
   scoreMgr?: number; // Manager score (0-5)
-  scoreAppr2?: number; // Approver2 score (0-5)
-  scoreAppr3?: number; // Approver3 score (0-5)
-  scoreGm?: number; // GM score (0-5)
+  scoreGm?: number; // MD/GM score (0-5)
   commentSelf?: string; // Employee comment
+  commentAppr1?: string; // Approver 1 comment
+  commentAppr2?: string; // Approver 2 comment
+  commentAppr3?: string; // Approver 3 comment
   commentMgr?: string; // Manager comment
-  commentAppr2?: string; // Approver2 comment
-  commentAppr3?: string; // Approver3 comment
-  commentGm?: string; // GM comment
+  commentGm?: string; // MD/GM comment
+
   rating?: number; // Legacy field (backward compatibility)
   comment?: string; // Legacy field (backward compatibility)
   createdAt: string;

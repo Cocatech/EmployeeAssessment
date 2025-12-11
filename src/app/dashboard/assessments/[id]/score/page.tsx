@@ -6,13 +6,13 @@ import { getResponsesByAssessment } from '@/actions/responses';
 import { notFound, redirect } from 'next/navigation';
 
 interface Props {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default async function AssessmentScoringPage({ params }: Props) {
-  const { id } = params;
+  const { id } = await params;
 
   // ดึงข้อมูล assessment
   const assessments = await getAssessments();
@@ -48,6 +48,13 @@ export default async function AssessmentScoringPage({ params }: Props) {
         questions={questions}
         existingResponses={responses}
         assessmentStatus={assessment.status}
+        employee={{
+          empCode: employee.empCode,
+          empName_Eng: employee.empName_Eng,
+          position: employee.position,
+          group: employee.group,
+          profileImage: employee.profileImage,
+        }}
       />
     </div>
   );

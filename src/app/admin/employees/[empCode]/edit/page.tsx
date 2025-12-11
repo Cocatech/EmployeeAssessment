@@ -6,22 +6,22 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { prisma } from '@/lib/db';
 import { getPositions, getGroups, getTeams } from '@/actions/settings';
-import { EditEmployeeForm } from '@/components/employees/EditEmployeeForm';
+import { EmployeeForm } from '@/components/employees/EmployeeForm';
 
 export const metadata = {
   title: 'Edit Employee | TRTH Assessment',
   description: 'Edit employee information',
 };
 
-export default async function EditEmployeePage({ 
-  params 
-}: { 
-  params: Promise<{ empCode: string }> 
+export default async function EditEmployeePage({
+  params
+}: {
+  params: Promise<{ empCode: string }>
 }) {
   const { empCode } = await params;
-  
+
   const session = await auth();
-  
+
   if (!session?.user) {
     redirect('/auth/signin');
   }
@@ -29,7 +29,7 @@ export default async function EditEmployeePage({
   const currentUser = session.user as any;
   const role = currentUser?.role;
   const userType = currentUser?.userType;
-  
+
   // Only System Admin or Employee Admin can access
   if (userType !== 'SYSTEM_ADMIN' && role !== 'ADMIN') {
     redirect('/dashboard');
@@ -70,7 +70,8 @@ export default async function EditEmployeePage({
       </div>
 
       <Card className="p-6">
-        <EditEmployeeForm
+        <EmployeeForm
+          mode="edit"
           employee={employee}
           allEmployees={allEmployees}
           positions={positions}

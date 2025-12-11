@@ -5,6 +5,7 @@
 
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
+import { ALL_QUESTION_TEMPLATES } from '../src/lib/question-templates';
 
 const prisma = new PrismaClient();
 
@@ -100,7 +101,7 @@ async function main() {
       position: 'System Administrator',
       group: 'IT',
       team: 'IT',
-      assessmentLevel: 'Management',
+      assessmentLevel: 'L6-Management',
       employeeType: 'Permanent',
       joinDate: new Date('2019-01-01'),
       warningCount: 0,
@@ -115,7 +116,7 @@ async function main() {
       position: 'Production Manager',
       group: 'PRD',
       team: 'Production A',
-      assessmentLevel: 'Management',
+      assessmentLevel: 'L6-Management',
       employeeType: 'Permanent',
       approver1_ID: 'EMP999',
       gm_ID: 'EMP999',
@@ -132,9 +133,10 @@ async function main() {
       position: 'QA Supervisor',
       group: 'QA',
       team: 'Quality Control',
-      assessmentLevel: 'Supervise',
+      assessmentLevel: 'L4-Supervise',
       employeeType: 'Permanent',
       approver1_ID: 'EMP001',
+      manager_ID: 'EMP001',
       gm_ID: 'EMP999',
       joinDate: new Date('2021-03-20'),
       warningCount: 0,
@@ -149,9 +151,10 @@ async function main() {
       position: 'Production Operator',
       group: 'PRD',
       team: 'Production B',
-      assessmentLevel: 'Operate',
+      assessmentLevel: 'L2-Operator',
       employeeType: 'Permanent',
       approver1_ID: 'EMP001',
+      manager_ID: 'EMP001',
       gm_ID: 'EMP999',
       joinDate: new Date('2022-06-10'),
       warningCount: 1,
@@ -166,7 +169,7 @@ async function main() {
       position: 'General Manager',
       group: 'MGT',
       team: 'Management',
-      assessmentLevel: 'Management',
+      assessmentLevel: 'L6-Management',
       employeeType: 'Permanent',
       joinDate: new Date('2019-01-01'),
       warningCount: 0,
@@ -186,7 +189,7 @@ async function main() {
   // Seed Users (for authentication)
   console.log('👤 Seeding users...');
   const hashedPassword = await bcrypt.hash('password', 10);
-  
+
   const users = [
     {
       empCode: 'SYSADMIN',
@@ -244,148 +247,76 @@ async function main() {
   }
   console.log(`✅ Created ${users.length} users`);
 
-  // Seed Assessment Questions
-  console.log('❓ Seeding questions...');
-  const questions = [
-    // Work Quality
-    {
-      questionTitle: 'คุณภาพของงาน (Quality of Work)',
-      description: 'ประเมินคุณภาพและความถูกต้องของงานที่ทำ',
-      category: 'work_quality',
-      applicableLevel: 'All',
-      weight: 1.0,
-      maxScore: 5,
-      order: 1,
-      isActive: true,
-    },
-    {
-      questionTitle: 'ความรับผิดชอบต่องาน (Responsibility)',
-      description: 'ความรับผิดชอบและความตั้งใจในการทำงาน',
-      category: 'work_quality',
-      applicableLevel: 'All',
-      weight: 1.0,
-      maxScore: 5,
-      order: 2,
-      isActive: true,
-    },
-    // Productivity
-    {
-      questionTitle: 'ประสิทธิภาพการทำงาน (Productivity)',
-      description: 'ความสามารถในการทำงานให้เสร็จตามเป้าหมาย',
-      category: 'productivity',
-      applicableLevel: 'All',
-      weight: 1.0,
-      maxScore: 5,
-      order: 3,
-      isActive: true,
-    },
-    {
-      questionTitle: 'การจัดการเวลา (Time Management)',
-      description: 'ความสามารถในการจัดการเวลาและปริมาณงาน',
-      category: 'productivity',
-      applicableLevel: 'All',
-      weight: 0.8,
-      maxScore: 5,
-      order: 4,
-      isActive: true,
-    },
-    // Teamwork
-    {
-      questionTitle: 'การทำงานเป็นทีม (Teamwork)',
-      description: 'ความสามารถในการทำงานร่วมกับผู้อื่น',
-      category: 'teamwork',
-      applicableLevel: 'All',
-      weight: 0.9,
-      maxScore: 5,
-      order: 5,
-      isActive: true,
-    },
-    {
-      questionTitle: 'การสื่อสาร (Communication)',
-      description: 'ทักษะการสื่อสารและประสานงาน',
-      category: 'teamwork',
-      applicableLevel: 'All',
-      weight: 0.8,
-      maxScore: 5,
-      order: 6,
-      isActive: true,
-    },
-    // Leadership (Management/Supervise only)
-    {
-      questionTitle: 'ภาวะผู้นำ (Leadership)',
-      description: 'ความสามารถในการนำทีมและสร้างแรงบันดาลใจ',
-      category: 'leadership',
-      applicableLevel: 'Management',
-      weight: 1.2,
-      maxScore: 5,
-      order: 7,
-      isActive: true,
-    },
-    {
-      questionTitle: 'การตัดสินใจ (Decision Making)',
-      description: 'ความสามารถในการตัดสินใจและแก้ปัญหา',
-      category: 'leadership',
-      applicableLevel: 'Management',
-      weight: 1.1,
-      maxScore: 5,
-      order: 8,
-      isActive: true,
-    },
-    // Technical Skills
-    {
-      questionTitle: 'ทักษะเฉพาะทาง (Technical Skills)',
-      description: 'ความรู้และทักษะเฉพาะทางในงาน',
-      category: 'technical',
-      applicableLevel: 'All',
-      weight: 1.0,
-      maxScore: 5,
-      order: 9,
-      isActive: true,
-    },
-    {
-      questionTitle: 'การพัฒนาตนเอง (Self Development)',
-      description: 'ความพยายามในการพัฒนาและเรียนรู้สิ่งใหม่',
-      category: 'technical',
-      applicableLevel: 'All',
-      weight: 0.7,
-      maxScore: 5,
-      order: 10,
-      isActive: true,
-    },
-  ];
+  // Seed Assessment Questions from Templates
+  console.log('❓ Seeding questions from templates...');
+  let questionCount = 0;
 
-  for (const question of questions) {
-    await prisma.assessmentQuestion.create({
-      data: question,
-    });
+  for (const [levelCode, questions] of Object.entries(ALL_QUESTION_TEMPLATES)) {
+    console.log(`  📝 Seeding ${questions.length} questions for ${levelCode}...`);
+
+    for (const question of questions) {
+      await prisma.assessmentQuestion.create({
+        data: {
+          questionTitle: question.questionTitle,
+          description: question.description,
+          category: question.category,
+          weight: question.weight,
+          maxScore: question.maxScore,
+          order: question.order,
+          applicableLevel: levelCode,
+          isActive: true,
+        },
+      });
+      questionCount++;
+    }
   }
-  console.log(`✅ Created ${questions.length} questions`);
+  console.log(`✅ Created ${questionCount} questions for all levels`);
 
-  // Seed Sample Assessment
-  console.log('📋 Seeding sample assessment...');
-  const assessment = await prisma.assessment.create({
+  // Seed Sample Assessments
+  console.log('📋 Seeding sample assessments...');
+
+  // 1. Draft template (Admin เป็นเจ้าของ)
+  const draftAssessment = await prisma.assessment.create({
     data: {
-      title: 'Q1 2024 Performance Review',
-      description: 'First quarter performance assessment',
+      title: 'Q1 2024 Performance Review (Draft)',
+      description: 'Draft template for assessment',
       assessmentType: 'Annual',
-      status: 'DRAFT',
-      employeeId: 'EMP003',
-      assessorId: 'EMP001',
+      status: 'Draft',
+      isDraft: true,
+      targetLevel: 'L2-Operator',
+      employeeId: 'SYSADMIN', // Admin is owner for Draft
+      assessorId: 'SYSADMIN',
       periodStart: new Date('2024-01-01'),
       periodEnd: new Date('2024-03-31'),
       dueDate: new Date('2024-04-15'),
     },
   });
-  console.log(`✅ Created sample assessment: ${assessment.id}`);
+  console.log(`✅ Created draft assessment: ${draftAssessment.id}`);
+
+  // 2. Assigned assessment สำหรับ EMP003 (พนักงานทำได้)
+  const assignedAssessment = await prisma.assessment.create({
+    data: {
+      title: 'Q1 2024 Performance Review - Bob Johnson',
+      description: 'Assigned assessment for Bob Johnson',
+      assessmentType: 'Annual',
+      status: 'Assigned',
+      isDraft: false,
+      targetLevel: 'L2-Operator',
+      employeeId: 'EMP003',
+      assessorId: 'SYSADMIN',
+      periodStart: new Date('2024-01-01'),
+      periodEnd: new Date('2024-03-31'),
+      dueDate: new Date('2024-04-15'),
+      assignedAt: new Date(),
+    },
+  });
+  console.log(`✅ Created assigned assessment for EMP003: ${assignedAssessment.id}`);
 
   // Seed Sample Responses
   console.log('💬 Seeding sample responses...');
   const allQuestions = await prisma.assessmentQuestion.findMany({
     where: {
-      OR: [
-        { applicableLevel: 'All' },
-        { applicableLevel: 'Operate' },
-      ],
+      applicableLevel: 'L2-Operator',
     },
   });
 
@@ -393,7 +324,7 @@ async function main() {
   for (const question of allQuestions) {
     await prisma.assessmentResponse.create({
       data: {
-        assessmentId: assessment.id,
+        assessmentId: assignedAssessment.id,
         questionId: question.id,
         questionTitle: question.questionTitle,
         questionWeight: question.weight,

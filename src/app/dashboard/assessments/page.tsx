@@ -18,20 +18,20 @@ export default async function DashboardAssessmentsPage() {
   const role = currentUserSession?.role;
   const userType = currentUserSession?.userType;
   const currentUserId = currentUserSession?.empCode || '';
-  
+
   // ดึงข้อมูลจาก database
   const assessments = await getAssessments();
   const employees = await getEmployees();
-  
+
   const currentUser = employees.find(e => e.empCode === currentUserId);
-  
+
   // Check if user has permission to create assessments
   // Only allow: System Admin or Employee Admin
   const isAdmin = userType === 'SYSTEM_ADMIN' || role === 'ADMIN';
-  
+
   // Only Admin can create assessments
   const canCreateAssessment = isAdmin;
-  
+
   // Debug logging (remove in production)
   console.log('Permission Check:', {
     currentUserId,
@@ -39,56 +39,54 @@ export default async function DashboardAssessmentsPage() {
     isAdmin,
     canCreateAssessment
   });
-  
-  // Filter assessments ที่ต้อง approve
+
+  // Filter assessments based on permission
   const filteredAssessments = assessments.filter(assessment => {
     const employee = employees.find(e => e.empCode === assessment.employeeId);
+    const statusUpper = assessment.status.toUpperCase();
+
+    // Admin เห็นทั้งหมด (ทุก Draft และทุก Assessment)
+    if (isAdmin) {
+      return true;
+    }
+
+    // Employee sees their own assessments (Assigned, In Progress, Completed, etc.)
+    if (assessment.employeeId === currentUserId) {
+      return true;
+    }
+
     if (!employee) return false;
-    
-    // แสดง DRAFT ของตัวเอง
-    if (assessment.status === 'DRAFT' && assessment.employeeId === currentUserId) {
-      return true;
+
+    // Approvers see ALL assessments for employees in their approval chain
+    // (except Draft which is admin-only template)
+    if (statusUpper !== 'DRAFT') {
+      // Is current user an approver for this employee?
+      const isApprover =
+        employee.approver1_ID === currentUserId ||
+        employee.approver2_ID === currentUserId ||
+        employee.approver3_ID === currentUserId ||
+        employee.gm_ID === currentUserId;
+
+      if (isApprover) {
+        return true;
+      }
     }
-    
-    // แสดง assessment ที่รอ Manager approve (ถ้าเราเป็น Manager)
-    if (assessment.status === 'SUBMITTED_MGR' && employee.approver1_ID === currentUserId) {
-      return true;
-    }
-    
-    // แสดง assessment ที่รอ Approver2 approve (ถ้าเราเป็น Approver2)
-    if (assessment.status === 'SUBMITTED_APPR2' && employee.approver2_ID === currentUserId) {
-      return true;
-    }
-    
-    // แสดง assessment ที่รอ Approver3 approve (ถ้าเราเป็น Approver3)
-    if (assessment.status === 'SUBMITTED_APPR3' && employee.approver3_ID === currentUserId) {
-      return true;
-    }
-    
-    // แสดง assessment ที่รอ GM approve (ถ้าเราเป็น GM)
-    if (assessment.status === 'SUBMITTED_GM' && employee.gm_ID === currentUserId) {
-      return true;
-    }
-    
-    // แสดง COMPLETED/REJECTED ทั้งหมด
-    if (['COMPLETED', 'REJECTED'].includes(assessment.status)) {
-      return true;
-    }
-    
+
     return false;
   });
-  
+
   // สร้าง map สำหรับหา employee info จาก empCode
   const employeeMap = new Map(
-    employees.map(emp => [emp.empCode, { 
-      name: emp.empName_Eng, 
-      level: emp.assessmentLevel 
+    employees.map(emp => [emp.empCode, {
+      name: emp.empName_Eng,
+      level: emp.assessmentLevel
     }])
   );
 
   // แปลงข้อมูล assessment เพื่อใช้ใน UI
   const assessmentList = filteredAssessments.map(a => ({
     id: a.id,
+    title: a.title || `Assessment ${a.id.slice(0, 8)}`,
     empCode: a.employeeId,
     empName: employeeMap.get(a.employeeId)?.name || 'Unknown',
     level: employeeMap.get(a.employeeId)?.level || 'N/A',
@@ -193,7 +191,7 @@ export default async function DashboardAssessmentsPage() {
       {/* Assessments List */}
       <Card className="p-6">
         <h2 className="text-lg font-semibold mb-4">All Assessments</h2>
-        
+
         {assessmentList.length === 0 ? (
           <div className="text-center py-12">
             <ClipboardCheck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -216,7 +214,7 @@ export default async function DashboardAssessmentsPage() {
               >
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
                   <div>
-                    <p className="font-medium">{assessment.id}</p>
+                    <p className="font-medium">{assessment.title}</p>
                     <p className="text-sm text-muted-foreground">{assessment.empCode}</p>
                   </div>
                   <div>

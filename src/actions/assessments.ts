@@ -7,15 +7,15 @@ import type { Assessment } from '@/types';
 /**
  * Get all assessments with optional filters
  */
-export async function getAssessments(params?: { 
-  empCode?: string; 
+export async function getAssessments(params?: {
+  empCode?: string;
   status?: string;
   year?: number;
   quarter?: number;
 }): Promise<Assessment[]> {
   try {
     const where: any = {};
-    
+
     if (params?.empCode) where.employeeId = params.empCode;
     if (params?.status) where.status = params.status;
     if (params?.year && params?.quarter) {
@@ -45,6 +45,8 @@ export async function getAssessments(params?: {
       status: assessment.status as Assessment['status'],
       employeeId: assessment.employeeId,
       assessorId: assessment.assessorId || '',
+      targetLevel: assessment.targetLevel || undefined,
+      isDraft: assessment.isDraft,
       periodStart: assessment.periodStart.toISOString(),
       periodEnd: assessment.periodEnd.toISOString(),
       dueDate: assessment.dueDate?.toISOString() || '',
@@ -68,7 +70,7 @@ export async function getAssessments(params?: {
 export async function getAssessment(id: string) {
   try {
     const assessment = await findAssessmentById(id);
-    
+
     if (!assessment) {
       return { success: false, error: 'Assessment not found' };
     }
@@ -122,7 +124,7 @@ export async function createAssessment(data: Omit<Assessment, 'id' | 'createdAt'
         dueDate: data.dueDate ? new Date(data.dueDate) : new Date(),
       },
     });
-    
+
     revalidatePath('/dashboard/assessments');
     revalidatePath('/admin/assessments');
     return { success: true, id: result.id };
@@ -138,7 +140,7 @@ export async function createAssessment(data: Omit<Assessment, 'id' | 'createdAt'
 export async function updateAssessment(id: string, data: Partial<Assessment>) {
   try {
     const updateData: any = {};
-    
+
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description || null;
     if (data.status !== undefined) updateData.status = data.status;
@@ -156,11 +158,11 @@ export async function updateAssessment(id: string, data: Partial<Assessment>) {
         assessor: true,
       },
     });
-    
+
     revalidatePath('/dashboard/assessments');
     revalidatePath('/admin/assessments');
     revalidatePath(`/dashboard/assessments/${id}`);
-    
+
     return {
       success: true,
       data: {
@@ -196,7 +198,7 @@ export async function deleteAssessment(id: string) {
     await prisma.assessment.delete({
       where: { id },
     });
-    
+
     revalidatePath('/dashboard/assessments');
     revalidatePath('/admin/assessments');
     return { success: true };
@@ -361,7 +363,7 @@ export async function createAssessmentDraft(data: {
         targetLevel: data.targetLevel,
         status: 'Draft',
         isDraft: true,
-        employeeId: 'DRAFT', // Placeholder, will be replaced when assigned
+        employeeId: data.assessorId, // Use assessor as temporary employee for draft
         assessorId: data.assessorId,
         periodStart: data.periodStart,
         periodEnd: data.periodEnd,
@@ -455,10 +457,10 @@ export async function assignAssessmentToEmployees(assessmentId: string) {
     });
 
     revalidatePath('/dashboard/assessments');
-    return { 
-      success: true, 
+    return {
+      success: true,
       count: assessments.length,
-      message: `Assessment assigned to ${assessments.length} employees` 
+      message: `Assessment assigned to ${assessments.length} employees`
     };
   } catch (error) {
     console.error('Error assigning assessment:', error);
@@ -516,7 +518,7 @@ export async function submitSelfAssessment(assessmentId: string, responses: any[
 
     // Determine next stage - check if employee has Approver 1
     const nextStage = employee.approver1_ID ? 'PendingApprover1' : 'PendingManager';
-    const nextPerson = employee.approver1_ID || employee.approver1_ID; // Manager is approver1
+    const nextPerson = employee.approver1_ID || employee.manager_ID; // If no Approver1, go to Manager
 
     // Update assessment status
     await prisma.assessment.update({
@@ -545,7 +547,7 @@ export async function submitSelfAssessment(assessmentId: string, responses: any[
 
     revalidatePath('/dashboard/assessments');
     revalidatePath(`/dashboard/assessments/${assessmentId}`);
-    
+
     return { success: true, message: 'Assessment submitted successfully' };
   } catch (error) {
     console.error('Error submitting self assessment:', error);
@@ -593,7 +595,7 @@ export async function approveAssessment(
       } else {
         // Skip to manager
         nextStage = 'PendingManager';
-        nextPerson = employee.approver1_ID; // Manager is approver1
+        nextPerson = employee.manager_ID;
         updateData.managerStatus = 'Pending';
       }
     } else if (stage === 'approver2') {
@@ -609,7 +611,7 @@ export async function approveAssessment(
       } else {
         // Skip to manager
         nextStage = 'PendingManager';
-        nextPerson = employee.approver1_ID;
+        nextPerson = employee.manager_ID;
         updateData.managerStatus = 'Pending';
       }
     } else if (stage === 'approver3') {
@@ -619,7 +621,7 @@ export async function approveAssessment(
 
       // Go to manager
       nextStage = 'PendingManager';
-      nextPerson = employee.approver1_ID;
+      nextPerson = employee.manager_ID;
       updateData.managerStatus = 'Pending';
     } else if (stage === 'manager') {
       updateData.managerStatus = 'Approved';

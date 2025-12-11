@@ -6,9 +6,10 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { QuestionBuilder, Question } from './QuestionBuilder';
-import { Save, Send } from 'lucide-react';
+import { Save, Send, FileText } from 'lucide-react';
 import { createAssessmentDraft, assignAssessmentToEmployees } from '@/actions/assessments';
 import { ASSESSMENT_LEVELS } from '@/lib/assessment-levels';
+import { getQuestionsForLevel, QuestionTemplate } from '@/lib/question-templates';
 
 interface AssessmentType {
   id: string;
@@ -30,9 +31,48 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
   const [success, setSuccess] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
-  
+  const [selectedLevel, setSelectedLevel] = useState<string>('');
+
+  // Title Composition State
+  const [titleLevel, setTitleLevel] = useState<string>('');
+  const [titlePeriod, setTitlePeriod] = useState<string>('');
+  const [titleYear, setTitleYear] = useState<string>(new Date().getFullYear().toString());
+
+  // Generate title automatically
+  const composedTitle = `${titleLevel ? titleLevel : '[Level]'}-${titlePeriod ? titlePeriod : '[Period]'}-${titleYear}`;
+
   // Filter only active assessment types
   const activeAssessmentTypes = assessmentTypes.filter(type => type.isActive);
+
+  // Load questions from template based on selected level
+  const handleLoadFromTemplate = () => {
+    if (!selectedLevel) {
+      setError('Please select a Target Level first');
+      return;
+    }
+
+    const templateQuestions = getQuestionsForLevel(selectedLevel);
+
+    if (templateQuestions.length === 0) {
+      setError(`No template questions found for level: ${selectedLevel}`);
+      return;
+    }
+
+    // Convert QuestionTemplate to Question format
+    const newQuestions: Question[] = templateQuestions.map((template, index) => ({
+      id: `q-${Date.now()}-${index}`,
+      title: template.questionTitle,
+      description: template.description,
+      category: template.category,
+      weight: template.weight,
+      maxScore: template.maxScore,
+      order: template.order,
+    }));
+
+    setQuestions(newQuestions);
+    setSuccess(`Loaded ${newQuestions.length} questions from ${selectedLevel} template`);
+    setError('');
+  };
 
   const handleSaveDraft = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -77,10 +117,10 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
       if (result.success && result.id) {
         setAssessmentId(result.id);
         setSuccess('Assessment draft saved successfully! You can now assign it to employees.');
-        
+
         // TODO: Save questions to database
         // This would require creating AssessmentQuestion records
-        
+
       } else {
         setError(result.error || 'Failed to save draft');
       }
@@ -142,13 +182,63 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
             <label htmlFor="title" className="text-sm font-medium">
               Assessment Title <span className="text-red-500">*</span>
             </label>
-            <Input
-              id="title"
-              name="title"
-              placeholder="e.g., Annual Performance Review 2025"
-              required
-              disabled={isSubmitting}
-            />
+            <input type="hidden" name="title" value={composedTitle} />
+            <div className="grid grid-cols-3 gap-4">
+              {/* 1. Level Part */}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Level</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={titleLevel}
+                  onChange={(e) => setTitleLevel(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select Level</option>
+                  {ASSESSMENT_LEVELS.map((level) => (
+                    <option key={level.code} value={level.code}>
+                      {level.code}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Period Part */}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Period</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={titlePeriod}
+                  onChange={(e) => setTitlePeriod(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select Period</option>
+                  <option value="MID">MID (Mid-Year)</option>
+                  <option value="END">END (Year-End)</option>
+                  <option value="PROBATION">PROBATION</option>
+                </select>
+              </div>
+
+              {/* 3. Year Part */}
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Year</label>
+                <select
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={titleYear}
+                  onChange={(e) => setTitleYear(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                >
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i).map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mt-2 text-sm text-muted-foreground bg-slate-50 p-2 rounded">
+              Preview: <span className="font-semibold text-primary">{composedTitle}</span>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -190,20 +280,37 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
               <label htmlFor="targetLevel" className="text-sm font-medium">
                 Target Level <span className="text-red-500">*</span>
               </label>
-              <select
-                id="targetLevel"
-                name="targetLevel"
-                required
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                disabled={isSubmitting}
-              >
-                <option value="">Select Level</option>
-                {ASSESSMENT_LEVELS.map((level) => (
-                  <option key={level.code} value={level.code}>
-                    {level.code} - {level.name} ({level.description})
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  id="targetLevel"
+                  name="targetLevel"
+                  required
+                  value={selectedLevel}
+                  onChange={(e) => setSelectedLevel(e.target.value)}
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select Level</option>
+                  {ASSESSMENT_LEVELS.map((level) => (
+                    <option key={level.code} value={level.code}>
+                      {level.code} - {level.name} ({level.description})
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleLoadFromTemplate}
+                  disabled={isSubmitting || !selectedLevel}
+                  title="Load questions from template"
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Load Template
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select a level and click "Load Template" to auto-fill questions
+              </p>
             </div>
           </div>
 

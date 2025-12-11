@@ -53,13 +53,8 @@ export function AssessmentTypeManager({ assessmentTypes }: AssessmentTypeManager
     }
   };
 
-  const handleReorder = async (items: AssessmentType[]) => {
-    const updates = items.map((item, index) => ({
-      id: item.id,
-      sortOrder: index,
-    }));
-
-    await reorderAssessmentTypes(updates);
+  const handleReorder = async (items: { id: string; sortOrder: number }[]) => {
+    await reorderAssessmentTypes(items);
     router.refresh();
   };
 
@@ -107,9 +102,11 @@ export function AssessmentTypeManager({ assessmentTypes }: AssessmentTypeManager
 
       <DraggableList
         items={assessmentTypes}
+        onAdd={handleAdd}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onReorder={handleReorder}
+        itemLabel="Assessment Type"
       />
 
       <FormModal

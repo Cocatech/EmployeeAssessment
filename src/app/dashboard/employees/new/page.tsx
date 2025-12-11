@@ -15,7 +15,7 @@ export const metadata = {
 
 export default async function NewEmployeePage() {
   const session = await auth();
-  
+
   if (!session?.user) {
     redirect('/auth/signin');
   }
@@ -54,10 +54,11 @@ export default async function NewEmployeePage() {
       {/* Form */}
       <Card className="p-6">
         <EmployeeForm
+          mode="create"
           positions={positions}
           groups={groups}
           teams={teams}
-          employees={employees}
+          allEmployees={employees}
         />
       </Card>
     </div>

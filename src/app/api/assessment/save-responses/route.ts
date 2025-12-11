@@ -33,7 +33,17 @@ export async function POST(request: NextRequest) {
         // อัปเดตคำตอบเดิม
         const updated = await updateResponse(existing.id, {
           scoreSelf: response.scoreSelf,
+          scoreAppr1: response.scoreAppr1,
+          scoreAppr2: response.scoreAppr2,
+          scoreAppr3: response.scoreAppr3,
+          scoreMgr: response.scoreMgr,
+          scoreGm: response.scoreGm,
           commentSelf: response.commentSelf,
+          commentAppr1: response.commentAppr1,
+          commentAppr2: response.commentAppr2,
+          commentAppr3: response.commentAppr3,
+          commentMgr: response.commentMgr,
+          commentGm: response.commentGm,
         });
         results.push(updated);
       } else {
@@ -42,16 +52,26 @@ export async function POST(request: NextRequest) {
           assessmentId: response.assessmentId,
           questionId: response.questionId,
           scoreSelf: response.scoreSelf,
+          scoreAppr1: response.scoreAppr1,
+          scoreAppr2: response.scoreAppr2,
+          scoreAppr3: response.scoreAppr3,
+          scoreMgr: response.scoreMgr,
+          scoreGm: response.scoreGm,
           commentSelf: response.commentSelf,
+          commentAppr1: response.commentAppr1,
+          commentAppr2: response.commentAppr2,
+          commentAppr3: response.commentAppr3,
+          commentMgr: response.commentMgr,
+          commentGm: response.commentGm,
         });
         results.push(created);
       }
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Responses saved successfully',
-      count: results.length 
+      count: results.length
     });
 
   } catch (error) {

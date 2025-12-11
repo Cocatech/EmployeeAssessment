@@ -18,12 +18,16 @@ export async function getResponsesByAssessment(assessmentId: string): Promise<As
       questionTitle: r.question.questionTitle,
       questionWeight: r.question.weight,
       scoreSelf: r.scoreSelf || undefined,
-      scoreMgr: r.scoreMgr || undefined,
+      scoreAppr1: r.scoreAppr1 || undefined,
       scoreAppr2: r.scoreAppr2 || undefined,
+      scoreAppr3: r.scoreAppr3 || undefined,
+      scoreMgr: r.scoreMgr || undefined,
       scoreGm: r.scoreGm || undefined,
       commentSelf: r.commentSelf || undefined,
-      commentMgr: r.commentMgr || undefined,
+      commentAppr1: r.commentAppr1 || undefined,
       commentAppr2: r.commentAppr2 || undefined,
+      commentAppr3: r.commentAppr3 || undefined,
+      commentMgr: r.commentMgr || undefined,
       commentGm: r.commentGm || undefined,
       rating: r.scoreSelf || 0,
       createdAt: r.createdAt.toISOString(),
@@ -88,18 +92,20 @@ export async function createResponse(data: Omit<AssessmentResponse, 'id' | 'crea
         questionTitle: data.questionTitle || '',
         questionWeight: data.questionWeight || 0,
         scoreSelf: data.scoreSelf || null,
-        scoreMgr: data.scoreMgr || null,
+        scoreAppr1: data.scoreAppr1 || null,
         scoreAppr2: data.scoreAppr2 || null,
-        scoreAppr3: (data as any).scoreAppr3 || null,
+        scoreAppr3: data.scoreAppr3 || null,
+        scoreMgr: data.scoreMgr || null,
         scoreGm: data.scoreGm || null,
         commentSelf: data.commentSelf || null,
-        commentMgr: data.commentMgr || null,
+        commentAppr1: data.commentAppr1 || null,
         commentAppr2: data.commentAppr2 || null,
-        commentAppr3: (data as any).commentAppr3 || null,
+        commentAppr3: data.commentAppr3 || null,
+        commentMgr: data.commentMgr || null,
         commentGm: data.commentGm || null,
       },
     });
-    
+
     revalidatePath(`/dashboard/assessments/${data.assessmentId}`);
     return { success: true };
   } catch (error) {
@@ -114,21 +120,26 @@ export async function createResponse(data: Omit<AssessmentResponse, 'id' | 'crea
 export async function updateResponse(id: string, data: Partial<AssessmentResponse>) {
   try {
     const updateData: any = {};
-    
+
     if (data.scoreSelf !== undefined) updateData.scoreSelf = data.scoreSelf;
-    if (data.scoreMgr !== undefined) updateData.scoreMgr = data.scoreMgr;
+    if (data.scoreAppr1 !== undefined) updateData.scoreAppr1 = data.scoreAppr1;
     if (data.scoreAppr2 !== undefined) updateData.scoreAppr2 = data.scoreAppr2;
+    if (data.scoreAppr3 !== undefined) updateData.scoreAppr3 = data.scoreAppr3;
+    if (data.scoreMgr !== undefined) updateData.scoreMgr = data.scoreMgr;
     if (data.scoreGm !== undefined) updateData.scoreGm = data.scoreGm;
+
     if (data.commentSelf !== undefined) updateData.commentSelf = data.commentSelf || null;
-    if (data.commentMgr !== undefined) updateData.commentMgr = data.commentMgr || null;
+    if (data.commentAppr1 !== undefined) updateData.commentAppr1 = data.commentAppr1 || null;
     if (data.commentAppr2 !== undefined) updateData.commentAppr2 = data.commentAppr2 || null;
+    if (data.commentAppr3 !== undefined) updateData.commentAppr3 = data.commentAppr3 || null;
+    if (data.commentMgr !== undefined) updateData.commentMgr = data.commentMgr || null;
     if (data.commentGm !== undefined) updateData.commentGm = data.commentGm || null;
 
     await prisma.assessmentResponse.update({
       where: { id },
       data: updateData,
     });
-    
+
     if (data.assessmentId) {
       revalidatePath(`/dashboard/assessments/${data.assessmentId}`);
     }
@@ -155,7 +166,7 @@ export async function deleteResponse(id: string) {
     await prisma.assessmentResponse.delete({
       where: { id },
     });
-    
+
     revalidatePath(`/dashboard/assessments/${response.assessmentId}`);
     return { success: true };
   } catch (error) {
@@ -174,12 +185,16 @@ export async function saveResponses(
     questionTitle: string;
     questionWeight: number;
     scoreSelf?: number | null;
-    commentSelf?: string | null;
-    scoreMgr?: number | null;
-    commentMgr?: string | null;
+    scoreAppr1?: number | null;
     scoreAppr2?: number | null;
-    commentAppr2?: string | null;
+    scoreAppr3?: number | null;
+    scoreMgr?: number | null;
     scoreGm?: number | null;
+    commentSelf?: string | null;
+    commentAppr1?: string | null;
+    commentAppr2?: string | null;
+    commentAppr3?: string | null;
+    commentMgr?: string | null;
     commentGm?: string | null;
   }>
 ) {
@@ -200,26 +215,30 @@ export async function saveResponses(
             questionTitle: response.questionTitle || '',
             questionWeight: response.questionWeight || 0,
             scoreSelf: response.scoreSelf || null,
-            commentSelf: response.commentSelf || null,
-            scoreMgr: response.scoreMgr || null,
-            commentMgr: response.commentMgr || null,
+            scoreAppr1: response.scoreAppr1 || null,
             scoreAppr2: response.scoreAppr2 || null,
-            commentAppr2: response.commentAppr2 || null,
-            scoreAppr3: (response as any).scoreAppr3 || null,
-            commentAppr3: (response as any).commentAppr3 || null,
+            scoreAppr3: response.scoreAppr3 || null,
+            scoreMgr: response.scoreMgr || null,
             scoreGm: response.scoreGm || null,
+            commentSelf: response.commentSelf || null,
+            commentAppr1: response.commentAppr1 || null,
+            commentAppr2: response.commentAppr2 || null,
+            commentAppr3: response.commentAppr3 || null,
+            commentMgr: response.commentMgr || null,
             commentGm: response.commentGm || null,
           },
           update: {
             scoreSelf: response.scoreSelf !== undefined ? response.scoreSelf : undefined,
-            commentSelf: response.commentSelf !== undefined ? response.commentSelf : undefined,
-            scoreMgr: response.scoreMgr !== undefined ? response.scoreMgr : undefined,
-            commentMgr: response.commentMgr !== undefined ? response.commentMgr : undefined,
+            scoreAppr1: response.scoreAppr1 !== undefined ? response.scoreAppr1 : undefined,
             scoreAppr2: response.scoreAppr2 !== undefined ? response.scoreAppr2 : undefined,
-            commentAppr2: response.commentAppr2 !== undefined ? response.commentAppr2 : undefined,
-            scoreAppr3: (response as any).scoreAppr3 !== undefined ? (response as any).scoreAppr3 : undefined,
-            commentAppr3: (response as any).commentAppr3 !== undefined ? (response as any).commentAppr3 : undefined,
+            scoreAppr3: response.scoreAppr3 !== undefined ? response.scoreAppr3 : undefined,
+            scoreMgr: response.scoreMgr !== undefined ? response.scoreMgr : undefined,
             scoreGm: response.scoreGm !== undefined ? response.scoreGm : undefined,
+            commentSelf: response.commentSelf !== undefined ? response.commentSelf : undefined,
+            commentAppr1: response.commentAppr1 !== undefined ? response.commentAppr1 : undefined,
+            commentAppr2: response.commentAppr2 !== undefined ? response.commentAppr2 : undefined,
+            commentAppr3: response.commentAppr3 !== undefined ? response.commentAppr3 : undefined,
+            commentMgr: response.commentMgr !== undefined ? response.commentMgr : undefined,
             commentGm: response.commentGm !== undefined ? response.commentGm : undefined,
           },
         });
@@ -228,7 +247,7 @@ export async function saveResponses(
 
     // Calculate and update assessment total score
     await updateAssessmentScore(assessmentId);
-    
+
     revalidatePath(`/dashboard/assessments/${assessmentId}`);
     return { success: true };
   } catch (error) {
@@ -276,7 +295,7 @@ export async function deleteAssessmentResponses(assessmentId: string) {
     await prisma.assessmentResponse.deleteMany({
       where: { assessmentId },
     });
-    
+
     revalidatePath(`/dashboard/assessments/${assessmentId}`);
     return { success: true };
   } catch (error) {

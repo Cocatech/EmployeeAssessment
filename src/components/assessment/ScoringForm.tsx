@@ -24,18 +24,28 @@ interface Response {
   commentSelf?: string;
 }
 
+interface Employee {
+  empCode: string;
+  empName_Eng: string;
+  position: string;
+  group: string;
+  profileImage?: string | null;
+}
+
 interface ScoringPageProps {
   assessmentId: string;
   questions: Question[];
   existingResponses: any[];
   assessmentStatus: string;
+  employee: Employee;
 }
 
-export default function ScoringForm({ 
-  assessmentId, 
-  questions, 
+export default function ScoringForm({
+  assessmentId,
+  questions,
   existingResponses,
-  assessmentStatus 
+  assessmentStatus,
+  employee
 }: ScoringPageProps) {
   const router = useRouter();
   const [responses, setResponses] = useState<Record<string, Response>>({});
@@ -192,7 +202,9 @@ export default function ScoringForm({
     return Math.round((answered / questions.length) * 100);
   };
 
-  const isReadOnly = assessmentStatus !== 'DRAFT';
+  // Employee can edit when status is Draft (admin editing), Assigned (start assessment), or IN_PROGRESS
+  const editableStatuses = ['DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'INPROGRESS'];
+  const isReadOnly = !editableStatuses.includes(assessmentStatus.toUpperCase());
 
   return (
     <div className="space-y-6">
@@ -204,11 +216,22 @@ export default function ScoringForm({
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold">Self Assessment</h1>
-            <p className="text-sm text-muted-foreground">
-              Rate yourself on each criteria (0-5 scale)
-            </p>
+          <div className="flex items-center gap-4">
+            {employee.profileImage ? (
+              <div className="h-12 w-12 rounded-full overflow-hidden border">
+                <img src={employee.profileImage} alt="Employee" className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="h-12 w-12 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-500">
+                {employee.empName_Eng.charAt(0)}
+              </div>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold">Self Assessment</h1>
+              <p className="text-sm text-muted-foreground">
+                Rate yourself on each criteria (0-5 scale)
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -222,7 +245,7 @@ export default function ScoringForm({
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
+          <div
             className="bg-primary h-2 rounded-full transition-all"
             style={{ width: `${calculateProgress()}%` }}
           />
@@ -255,7 +278,7 @@ export default function ScoringForm({
           .sort((a, b) => a.order - b.order)
           .map((question, index) => {
             const response = responses[question.id] || {};
-            
+
             return (
               <Card key={question.id} className="p-6">
                 <div className="space-y-4">

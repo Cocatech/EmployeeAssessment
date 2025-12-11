@@ -2,7 +2,7 @@ services:
   # PostgreSQL 18 Database
   postgres:
     image: postgres:18-alpine
-    container_name: trth-postgres
+    container_name: trth-postgres-gravity
     user: postgres
     environment:
       POSTGRES_USER: postgres
@@ -28,7 +28,7 @@ services:
       dockerfile: Dockerfile.dev
       args:
         NODE_ENV: development
-    container_name: trth-app
+    container_name: trth-app-gravity
     depends_on:
       postgres:
         condition: service_healthy

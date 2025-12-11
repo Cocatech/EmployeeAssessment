@@ -7,7 +7,7 @@ import { getAssessments } from '@/actions/assessments';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { assessmentId, action, nextStatus } = body;
+    const { assessmentId, action } = body;
 
     if (!assessmentId || !action) {
       return NextResponse.json(
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ดึงข้อมูล assessment
+    // 1. Fetch assessment and employee data
     const assessments = await getAssessments();
     const assessment = assessments.find(a => a.id === assessmentId);
 
@@ -27,35 +27,90 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get full employee details (need approver chain)
+    // In a real app, this should be a DB join. Here we simulate fetching.
+    // Note: getAssessments might not return full employee object with all approver IDs
+    // so we might need to fetch employee separately if needed, but let's assume availability or fetch strictly
+    const { getEmployees } = await import('@/actions/employees');
+    const employees = await getEmployees();
+    const employee = employees.find(e => e.empCode === assessment.employeeId);
+
+    if (!employee) {
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+    }
+
+    // 2. Helper to determine next level
+    const determineNextStatus = (currentStatus: string): string => {
+      // Flow: ... -> SUBMITTED_APPR1 -> SUBMITTED_APPR2 -> SUBMITTED_APPR3 -> SUBMITTED_MGR -> SUBMITTED_GM -> COMPLETED
+
+      let next = 'COMPLETED';
+
+      // Determine logical next steps based on current status
+      switch (currentStatus) {
+        case 'SUBMITTED_APPR1':
+          // Check Appr2
+          if (employee.approver2_ID && employee.approver2_ID !== '-') return 'SUBMITTED_APPR2';
+        // Fall through to check Appr3
+
+        case 'SUBMITTED_APPR2':
+          // Check Appr3
+          if (employee.approver3_ID && employee.approver3_ID !== '-') return 'SUBMITTED_APPR3';
+        // Fall through to check Manager
+
+        case 'SUBMITTED_APPR3':
+          // Check Manager
+          if (employee.manager_ID && employee.manager_ID !== '-') return 'SUBMITTED_MGR';
+        // Fall through to check GM
+
+        case 'SUBMITTED_MGR':
+          // Check GM (Always exists? or check)
+          if (employee.gm_ID && employee.gm_ID !== '-') return 'SUBMITTED_GM';
+          return 'COMPLETED'; // If no GM, complete (unlikely)
+
+        case 'SUBMITTED_GM':
+          return 'COMPLETED';
+
+        default:
+          return 'COMPLETED';
+      }
+    };
+
     if (action === 'reject') {
-      // Reject assessment
       const updated = await updateAssessment(assessmentId, {
         status: 'REJECTED',
         updatedAt: new Date().toISOString(),
       });
 
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         message: 'Assessment rejected',
-        assessment: updated 
+        assessment: updated
       });
     }
 
     if (action === 'approve') {
-      // Legacy route - Use new workflow actions instead
-      // TODO: Migrate to use approveAssessment from @/actions/assessments
-      
+      const currentStatus = assessment.status;
+      const nextStatus = determineNextStatus(currentStatus);
+
       const updateData: any = {
-        status: nextStatus || 'Completed',
-        approvedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
+        status: nextStatus,
+        updatedAt: new Date().toISOString(),
       };
+
+      // Set completion stamps if finished
+      if (nextStatus === 'COMPLETED') {
+        updateData.completedAt = new Date().toISOString();
+        // Here you would copy the final score to 'finalScore'
+      }
+
+      // Update specific approver timestamps/statuses could be added here
+      // e.g., Set approvedByAppr1 = true, etc. based on currentStatus
 
       const updated = await updateAssessment(assessmentId, updateData);
 
-      return NextResponse.json({ 
-        success: true, 
-        message: 'Assessment approved (legacy)',
+      return NextResponse.json({
+        success: true,
+        message: `Assessment approved: ${currentStatus} -> ${nextStatus}`,
         assessment: updated,
       });
     }

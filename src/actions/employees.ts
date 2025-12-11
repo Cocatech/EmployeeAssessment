@@ -14,13 +14,14 @@ export async function getEmployees(params?: {
 }): Promise<Employee[]> {
   try {
     const employees = await findActiveEmployees(params);
-    
+
     return employees.map((emp) => ({
       empCode: emp.empCode,
       empName_Eng: emp.empName_Eng,
       empName_Thai: emp.empName_Thai || undefined,
       email: emp.email || null,
       phoneNumber: emp.phoneNumber || undefined,
+      profileImage: emp.profileImage || null,
       position: emp.position,
       group: emp.group,
       team: emp.team || undefined,
@@ -29,6 +30,7 @@ export async function getEmployees(params?: {
       approver1_ID: emp.approver1_ID || '',
       approver2_ID: emp.approver2_ID || null,
       approver3_ID: emp.approver3_ID || null,
+      manager_ID: emp.manager_ID || null,
       gm_ID: emp.gm_ID || '',
       joinDate: emp.joinDate.toISOString(),
       warningCount: emp.warningCount,
@@ -46,11 +48,11 @@ export async function getEmployees(params?: {
 export async function getEmployee(empCode: string) {
   try {
     const emp = await findEmployeeByCode(empCode);
-    
+
     if (!emp) {
       return { success: false, error: 'Employee not found' };
     }
-    
+
     const employee: any = {
       empCode: emp.empCode,
       empName_Eng: emp.empName_Eng,
@@ -66,12 +68,13 @@ export async function getEmployee(empCode: string) {
       approver1_ID: emp.approver1_ID || '',
       approver2_ID: emp.approver2_ID || null,
       approver3_ID: emp.approver3_ID || null,
+      manager_ID: emp.manager_ID || null,
       gm_ID: emp.gm_ID || '',
       joinDate: emp.joinDate.toISOString(),
       warningCount: emp.warningCount,
       isActive: emp.isActive,
     };
-    
+
     return { success: true, data: employee };
   } catch (error) {
     console.error('Error fetching employee:', error);
@@ -140,13 +143,14 @@ export async function createEmployee(data: Omit<Employee, 'empCode'> & { empCode
         approver1_ID: data.approver1_ID || null,
         approver2_ID: data.approver2_ID || null,
         approver3_ID: data.approver3_ID || null,
+        manager_ID: (data as any).manager_ID || null,
         gm_ID: data.gm_ID || null,
         joinDate: new Date(data.joinDate),
         warningCount: data.warningCount || 0,
         isActive: true,
       },
     });
-    
+
     revalidatePath('/admin/employees');
     revalidatePath('/dashboard/employees');
     return { success: true, id: result.id };
@@ -167,7 +171,7 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
     }
 
     const updateData: any = {};
-    
+
     if (data.empName_Eng !== undefined) updateData.empName_Eng = data.empName_Eng;
     if (data.empName_Thai !== undefined) updateData.empName_Thai = data.empName_Thai || null;
     if (data.email !== undefined) updateData.email = data.email || null;
@@ -181,6 +185,7 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
     if (data.approver1_ID !== undefined) updateData.approver1_ID = data.approver1_ID || null;
     if (data.approver2_ID !== undefined) updateData.approver2_ID = data.approver2_ID || null;
     if (data.approver3_ID !== undefined) updateData.approver3_ID = data.approver3_ID || null;
+    if ((data as any).manager_ID !== undefined) updateData.manager_ID = (data as any).manager_ID || null;
     if (data.gm_ID !== undefined) updateData.gm_ID = data.gm_ID || null;
     if (data.joinDate !== undefined) updateData.joinDate = new Date(data.joinDate);
     if (data.warningCount !== undefined) updateData.warningCount = data.warningCount;
@@ -190,7 +195,7 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
       where: { empCode },
       data: updateData,
     });
-    
+
     revalidatePath('/admin/employees');
     revalidatePath('/dashboard/employees');
     return { success: true };
@@ -206,7 +211,7 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
 export async function deleteEmployee(empCode: string) {
   try {
     const employee = await findEmployeeByCode(empCode);
-    
+
     if (!employee) {
       return { success: false, error: 'Employee not found' };
     }
@@ -216,7 +221,7 @@ export async function deleteEmployee(empCode: string) {
       where: { empCode },
       data: { isActive: false },
     });
-    
+
     revalidatePath('/admin/employees');
     revalidatePath('/dashboard/employees');
     return { success: true };
@@ -273,7 +278,7 @@ export async function getEmployeeStats() {
         return acc;
       }, {} as Record<string, number>),
     };
-    
+
     return { success: true, data: stats };
   } catch (error) {
     console.error('Error fetching employee stats:', error);

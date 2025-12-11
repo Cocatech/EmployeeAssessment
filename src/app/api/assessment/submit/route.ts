@@ -26,10 +26,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ตรวจสอบว่าเป็น DRAFT
-    if (assessment.status !== 'DRAFT') {
+    // ตรวจสอบว่าสามารถ Submit ได้ (Draft, Assigned, In Progress)
+    const submittableStatuses = ['DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'INPROGRESS'];
+    if (!submittableStatuses.includes(assessment.status.toUpperCase())) {
       return NextResponse.json(
-        { error: 'Assessment is not in DRAFT status' },
+        { error: 'Assessment cannot be submitted in current status' },
         { status: 400 }
       );
     }
@@ -46,14 +47,17 @@ export async function POST(request: NextRequest) {
     }
 
     // กำหนด next status ตาม workflow
-    let nextStatus = 'SUBMITTED_MGR';
-    
-    // ถ้าไม่มี Manager (approver1) ให้ข้ามไป Approver2, Approver3, หรือ GM
+    // Flow: Self → Approver1 → Approver2 → Approver3 → Manager → GM
+    let nextStatus = 'SUBMITTED_APPR1';
+
+    // ถ้าไม่มี Approver1 ให้ข้ามไป level ถัดไป
     if (!employee.approver1_ID || employee.approver1_ID === '-') {
       if (employee.approver2_ID && employee.approver2_ID !== '-') {
         nextStatus = 'SUBMITTED_APPR2';
       } else if (employee.approver3_ID && employee.approver3_ID !== '-') {
         nextStatus = 'SUBMITTED_APPR3';
+      } else if (employee.manager_ID && employee.manager_ID !== '-') {
+        nextStatus = 'SUBMITTED_MGR';
       } else {
         nextStatus = 'SUBMITTED_GM';
       }
@@ -65,18 +69,18 @@ export async function POST(request: NextRequest) {
       submittedAt: new Date().toISOString(),
     });
 
-    console.log('Submit assessment result:', { 
-      updated, 
-      assessmentId, 
+    console.log('Submit assessment result:', {
+      updated,
+      assessmentId,
       nextStatus,
       hasManager: !!employee.approver1_ID,
-      hasApprover2: !!employee.approver2_ID 
+      hasApprover2: !!employee.approver2_ID
     });
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       message: 'Assessment submitted successfully',
-      assessment: updated 
+      assessment: updated
     });
 
   } catch (error) {

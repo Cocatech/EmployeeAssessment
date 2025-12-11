@@ -22,14 +22,16 @@ interface Response {
   id: string;
   questionId: string;
   scoreSelf?: number;
-  scoreMgr?: number;
-  scoreAppr2?: number;
-  scoreAppr3?: number;
-  scoreGm?: number;
+  scoreAppr1?: number; // Approver 1
+  scoreAppr2?: number; // Approver 2
+  scoreAppr3?: number; // Approver 3
+  scoreMgr?: number;   // Manager (New)
+  scoreGm?: number;    // GM
   commentSelf?: string;
-  commentMgr?: string;
+  commentAppr1?: string;
   commentAppr2?: string;
   commentAppr3?: string;
+  commentMgr?: string;
   commentGm?: string;
 }
 
@@ -38,6 +40,7 @@ interface Employee {
   empName_Eng: string;
   position: string;
   group: string;
+  profileImage?: string | null;
 }
 
 interface ApprovalFormProps {
@@ -46,45 +49,90 @@ interface ApprovalFormProps {
   employee: Employee;
   questions: Question[];
   responses: Response[];
-  currentUserRole: 'manager' | 'approver2' | 'approver3' | 'gm';
+  currentUserRole: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'gm';
+  approver1Id?: string | null;
   approver2Id?: string | null;
   approver3Id?: string | null;
+  managerId?: string | null;
+  gmId?: string | null;
 }
 
-export default function ApprovalForm({ 
+export default function ApprovalForm({
   assessmentId,
   assessmentStatus,
   employee,
   questions,
   responses: initialResponses,
   currentUserRole,
+  approver1Id,
   approver2Id,
-  approver3Id
+  approver3Id,
+  managerId,
+  gmId
 }: ApprovalFormProps) {
   const router = useRouter();
-  const [responses, setResponses] = useState<Record<string, Partial<Response>>>(
-    Object.fromEntries(initialResponses.map(r => [r.questionId, r]))
-  );
+
+  // Initialize responses with auto-fill logic for shared approvers
+  const [responses, setResponses] = useState<Record<string, Partial<Response>>>(() => {
+    const initialMap: Record<string, Partial<Response>> = {};
+
+    initialResponses.forEach(r => {
+      const val = { ...r };
+
+      // Auto-fill logic: If current approver is same as a previous one, copy the score
+      if (currentUserRole === 'approver2') {
+        if (approver2Id === approver1Id && val.scoreAppr2 === undefined) {
+          val.scoreAppr2 = val.scoreAppr1;
+          val.commentAppr2 = val.commentAppr1;
+        }
+      } else if (currentUserRole === 'approver3') {
+        if (approver3Id === approver2Id && val.scoreAppr3 === undefined) {
+          val.scoreAppr3 = val.scoreAppr2;
+          val.commentAppr3 = val.commentAppr2;
+        } else if (approver3Id === approver1Id && val.scoreAppr3 === undefined) {
+          val.scoreAppr3 = val.scoreAppr1;
+          val.commentAppr3 = val.commentAppr1;
+        }
+      } else if (currentUserRole === 'manager') {
+        // Manager is reviewer only - DO NOT copy scores
+      } else if (currentUserRole === 'gm') {
+        // GM is reviewer only - DO NOT copy scores
+      }
+
+      initialMap[r.questionId] = val;
+    });
+
+    return initialMap;
+  });
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // กำหนด field ที่ใช้ตาม role
-  const scoreField = currentUserRole === 'manager' ? 'scoreMgr' 
+  // Determine current field based on role
+  // Note: Database field mapping
+  // approver1 -> scoreAppr1
+  // approver2 -> scoreAppr2
+  // approver3 -> scoreAppr3
+  // manager -> scoreMgr
+  // gm -> scoreGm
+  const scoreField = currentUserRole === 'approver1' ? 'scoreAppr1'
     : currentUserRole === 'approver2' ? 'scoreAppr2'
-    : currentUserRole === 'approver3' ? 'scoreAppr3'
-    : 'scoreGm';
-  
-  const commentField = currentUserRole === 'manager' ? 'commentMgr'
-    : currentUserRole === 'approver2' ? 'commentAppr2'
-    : currentUserRole === 'approver3' ? 'commentAppr3'
-    : 'commentGm';
+      : currentUserRole === 'approver3' ? 'scoreAppr3'
+        : currentUserRole === 'manager' ? 'scoreMgr'
+          : 'scoreGm';
 
-  const roleLabel = currentUserRole === 'manager' ? 'Manager'
+  const commentField = currentUserRole === 'approver1' ? 'commentAppr1'
+    : currentUserRole === 'approver2' ? 'commentAppr2'
+      : currentUserRole === 'approver3' ? 'commentAppr3'
+        : currentUserRole === 'manager' ? 'commentMgr'
+          : 'commentGm';
+
+  const roleLabel = currentUserRole === 'approver1' ? 'Approver 1'
     : currentUserRole === 'approver2' ? 'Approver 2'
-    : currentUserRole === 'approver3' ? 'Approver 3'
-    : 'GM';
+      : currentUserRole === 'approver3' ? 'Approver 3'
+        : currentUserRole === 'manager' ? 'Manager'
+          : 'MD';
 
   const handleScoreChange = (questionId: string, score: string) => {
     const numScore = parseFloat(score);
@@ -110,6 +158,11 @@ export default function ApprovalForm({
   };
 
   const validateResponses = (): boolean => {
+    // Managers and GMs are reviewers only, validation skipped for scores
+    if (['manager', 'gm'].includes(currentUserRole)) {
+      return true;
+    }
+
     const unanswered = questions.filter(q => {
       const response = responses[q.id];
       return !response || response[scoreField] === undefined || response[scoreField] === null;
@@ -165,7 +218,7 @@ export default function ApprovalForm({
     setError('');
 
     try {
-      // Save responses first
+      // 1. Save responses first
       const responseData = Object.entries(responses).map(([questionId, resp]) => ({
         id: resp.id,
         assessmentId,
@@ -184,34 +237,13 @@ export default function ApprovalForm({
         throw new Error('Failed to save responses');
       }
 
-      // Determine next status
-      let nextStatus = '';
-      if (currentUserRole === 'manager') {
-        // ถ้ามี Approver2 ให้ส่งต่อไป, ไม่มีแต่มี Approver3 ให้ส่งไป Approver3, ไม่มีทั้งคู่ให้ส่งไป GM
-        if (approver2Id && approver2Id !== '-') {
-          nextStatus = 'SUBMITTED_APPR2';
-        } else if (approver3Id && approver3Id !== '-') {
-          nextStatus = 'SUBMITTED_APPR3';
-        } else {
-          nextStatus = 'SUBMITTED_GM';
-        }
-      } else if (currentUserRole === 'approver2') {
-        // ถ้ามี Approver3 ให้ส่งต่อไป, ไม่มีให้ส่งไป GM
-        nextStatus = approver3Id && approver3Id !== '-' ? 'SUBMITTED_APPR3' : 'SUBMITTED_GM';
-      } else if (currentUserRole === 'approver3') {
-        nextStatus = 'SUBMITTED_GM';
-      } else {
-        nextStatus = 'COMPLETED';
-      }
-
-      // Update assessment status
+      // 2. Call Approve API (Server determines next status)
       const approveResponse = await fetch('/api/assessment/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           assessmentId,
           action: 'approve',
-          nextStatus 
         }),
       });
 
@@ -240,10 +272,9 @@ export default function ApprovalForm({
       const rejectResponse = await fetch('/api/assessment/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           assessmentId,
-          action: 'reject',
-          nextStatus: 'REJECTED'
+          action: 'reject'
         }),
       });
 
@@ -269,6 +300,11 @@ export default function ApprovalForm({
   };
 
   const calculateProgress = () => {
+    // Managers and GMs are reviewers only, progress always 100%
+    if (['manager', 'gm'].includes(currentUserRole)) {
+      return 100;
+    }
+
     const answered = questions.filter(q => {
       const response = responses[q.id];
       return response && response[scoreField] !== undefined && response[scoreField] !== null;
@@ -276,8 +312,42 @@ export default function ApprovalForm({
     return Math.round((answered / questions.length) * 100);
   };
 
+  // Helper to render score block with cleaner code
+  const renderScoreBlock = (
+    title: string,
+    score?: number,
+    comment?: string,
+    bgColor: string = "bg-gray-50",
+    borderColor: string = "border-gray-200",
+    textColor: string = "text-gray-900",
+    scoreFieldKey?: keyof Response
+  ) => (
+    <div className={`${bgColor} border ${borderColor} rounded-lg p-4`}>
+      <h4 className={`text-sm font-semibold mb-2 ${textColor}`}>{title}</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className={`text-sm font-medium mb-1 block ${textColor}`}>Score</label>
+          <div className="flex items-center gap-2">
+            <span className={`text-2xl font-bold ${getScoreColor(score)}`}>
+              {score !== undefined && score !== null ? score.toFixed(1) : 'N/A'}
+            </span>
+            <span className="text-sm text-muted-foreground">/ 5.0</span>
+          </div>
+        </div>
+        <div>
+          <label className={`text-sm font-medium mb-1 block ${textColor}`}>Comment</label>
+          <p className="text-sm text-gray-700">
+            {comment || 'No comment provided'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const isReviewerOnly = ['manager', 'gm'].includes(currentUserRole);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -286,11 +356,22 @@ export default function ApprovalForm({
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <div>
-            <h1 className="text-2xl font-bold">{roleLabel} Review</h1>
-            <p className="text-sm text-muted-foreground">
-              {employee.empCode} - {employee.empName_Eng} ({employee.position})
-            </p>
+          <div className="flex items-center gap-4">
+            {employee.profileImage ? (
+              <div className="h-12 w-12 rounded-full overflow-hidden border">
+                <img src={employee.profileImage} alt="Employee" className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="h-12 w-12 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-500">
+                {employee.empName_Eng.charAt(0)}
+              </div>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold">{roleLabel} Review</h1>
+              <p className="text-sm text-muted-foreground">
+                {employee.empCode} - {employee.empName_Eng} ({employee.position})
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -304,7 +385,7 @@ export default function ApprovalForm({
           </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
+          <div
             className="bg-primary h-2 rounded-full transition-all"
             style={{ width: `${calculateProgress()}%` }}
           />
@@ -331,7 +412,7 @@ export default function ApprovalForm({
           .sort((a, b) => a.order - b.order)
           .map((question, index) => {
             const response = responses[question.id] || {};
-            
+
             return (
               <Card key={question.id} className="p-6">
                 <div className="space-y-4">
@@ -362,128 +443,60 @@ export default function ApprovalForm({
                     </div>
                   </div>
 
-                  {/* Employee's Self Assessment (Read-only) */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="text-sm font-semibold mb-2 text-blue-900">Employee's Self Assessment</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium mb-1 block text-blue-900">Score</label>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-2xl font-bold ${getScoreColor(response.scoreSelf)}`}>
-                            {response.scoreSelf !== undefined ? response.scoreSelf.toFixed(1) : 'N/A'}
-                          </span>
-                          <span className="text-sm text-muted-foreground">/ 5.0</span>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-1 block text-blue-900">Comment</label>
-                        <p className="text-sm text-gray-700">
-                          {response.commentSelf || 'No comment provided'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  {/* 1. Self Assessment (Always Visible) */}
+                  {renderScoreBlock("Employee's Self Assessment", response.scoreSelf, response.commentSelf, "bg-blue-50", "border-blue-200", "text-blue-900")}
 
-                  {/* Manager Score (if reviewing as Approver2/GM) */}
-                  {currentUserRole !== 'manager' && response.scoreMgr !== undefined && response.scoreMgr !== null && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                      <h4 className="text-sm font-semibold mb-2 text-green-900">Manager's Review</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-medium mb-1 block text-green-900">Score</label>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-2xl font-bold ${getScoreColor(response.scoreMgr)}`}>
-                              {response.scoreMgr.toFixed(1)}
-                            </span>
-                            <span className="text-sm text-muted-foreground">/ 5.0</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium mb-1 block text-green-900">Comment</label>
-                          <p className="text-sm text-gray-700">
-                            {response.commentMgr || 'No comment provided'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  {/* 2. Approver 1 (Visible to Appr2, Appr3, Mgr, GM) */}
+                  {currentUserRole !== 'approver1' && response.scoreAppr1 !== undefined && (
+                    renderScoreBlock("Approver 1's Review", response.scoreAppr1, response.commentAppr1, "bg-green-50", "border-green-200", "text-green-900")
                   )}
 
-                  {/* Approver2 Score (if reviewing as Approver3/GM) */}
-                  {['approver3', 'gm'].includes(currentUserRole) && response.scoreAppr2 !== undefined && response.scoreAppr2 !== null && (
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                      <h4 className="text-sm font-semibold mb-2 text-yellow-900">Approver 2's Review</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="text-sm font-medium mb-1 block text-yellow-900">Score</label>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-2xl font-bold ${getScoreColor(response.scoreAppr2)}`}>
-                              {response.scoreAppr2.toFixed(1)}
-                            </span>
-                            <span className="text-sm text-muted-foreground">/ 5.0</span>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium mb-1 block text-yellow-900">Comment</label>
-                          <p className="text-sm text-gray-700">
-                            {response.commentAppr2 || 'No comment provided'}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  {/* 3. Approver 2 (Visible to Appr3, Mgr, GM) */}
+                  {['approver3', 'manager', 'gm'].includes(currentUserRole) && response.scoreAppr2 !== undefined && (
+                    renderScoreBlock("Approver 2's Review", response.scoreAppr2, response.commentAppr2, "bg-yellow-50", "border-yellow-200", "text-yellow-900")
                   )}
 
-                  {/* Approver3 Score (if reviewing as GM) */}
-                  {currentUserRole === 'gm' && response.scoreAppr3 !== undefined && response.scoreAppr3 !== null && (
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                      <h4 className="text-sm font-semibold mb-2 text-purple-900">Approver 3's Review</h4>
+
+
+
+
+                  {/* Your Score Input (Current User) */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 ring-2 ring-primary/20">
+                    <h4 className="text-sm font-semibold mb-3 text-slate-900">Your {roleLabel} Review</h4>
+
+                    {!isReviewerOnly && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="text-sm font-medium mb-1 block text-purple-900">Score</label>
+                          <label className="text-sm font-medium mb-2 block">
+                            Your Score (0-5) <span className="text-red-500">*</span>
+                          </label>
                           <div className="flex items-center gap-2">
-                            <span className={`text-2xl font-bold ${getScoreColor(response.scoreAppr3)}`}>
-                              {response.scoreAppr3.toFixed(1)}
-                            </span>
+                            <Input
+                              type="number"
+                              min="0"
+                              max="5"
+                              step="0.5"
+                              value={response[scoreField] ?? ''}
+                              onChange={(e) => handleScoreChange(question.id, e.target.value)}
+                              className="w-24 font-bold"
+                              placeholder="0.0"
+                            />
                             <span className="text-sm text-muted-foreground">/ 5.0</span>
+                            {response[scoreField] !== undefined && response[scoreField] !== null && (
+                              <span className={`text-lg font-bold ml-2 ${getScoreColor(response[scoreField])}`}>
+                                {response[scoreField]!.toFixed(1)}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div>
-                          <label className="text-sm font-medium mb-1 block text-purple-900">Comment</label>
-                          <p className="text-sm text-gray-700">
-                            {response.commentAppr3 || 'No comment provided'}
-                          </p>
-                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Your Score Input */}
-                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                    <h4 className="text-sm font-semibold mb-3 text-orange-900">Your {roleLabel} Review</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">
-                          Your Score (0-5) <span className="text-red-500">*</span>
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <Input
-                            type="number"
-                            min="0"
-                            max="5"
-                            step="0.5"
-                            value={response[scoreField] ?? ''}
-                            onChange={(e) => handleScoreChange(question.id, e.target.value)}
-                            className="w-24"
-                            placeholder="0.0"
-                          />
-                          <span className="text-sm text-muted-foreground">/ 5.0</span>
-                          {response[scoreField] !== undefined && response[scoreField] !== null && (
-                            <span className={`text-lg font-bold ml-2 ${getScoreColor(response[scoreField])}`}>
-                              {response[scoreField]!.toFixed(1)}
-                            </span>
-                          )}
-                        </div>
+                    {isReviewerOnly && (
+                      <div className="mb-3 p-3 bg-blue-50 text-blue-700 rounded text-sm">
+                        <span className="font-semibold">Reviewer Mode:</span> You are reviewing scores from prior approvers. No score input required.
                       </div>
-                    </div>
+                    )}
 
                     <div className="mt-3">
                       <label className="text-sm font-medium mb-2 block">
@@ -493,7 +506,7 @@ export default function ApprovalForm({
                         value={response[commentField] ?? ''}
                         onChange={(e) => handleCommentChange(question.id, e.target.value)}
                         className="w-full px-3 py-2 border border-input rounded-md bg-background min-h-[80px]"
-                        placeholder="Provide feedback, suggestions for improvement..."
+                        placeholder={`Provide feedback as ${roleLabel}...`}
                       />
                     </div>
                   </div>
@@ -532,7 +545,7 @@ export default function ApprovalForm({
             </Button>
             <Button
               onClick={handleApprove}
-              disabled={isSaving || isSubmitting || calculateProgress() < 100}
+              disabled={isSaving || isSubmitting || (!isReviewerOnly && calculateProgress() < 100)}
             >
               {isSubmitting ? 'Processing...' : (
                 <>

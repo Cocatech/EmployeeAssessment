@@ -7,15 +7,22 @@ import { getEmployees } from '@/actions/employees';
 import { getResponsesByAssessment } from '@/actions/responses';
 import { getQuestionsByLevel } from '@/actions/questions';
 import { notFound } from 'next/navigation';
+import { calculateFinalResult, calculateWeightedScore, calculateRank } from '@/lib/score-utils';
 
 interface Props {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
+import { auth } from '@/lib/auth';
+
 export default async function AssessmentSummaryPage({ params }: Props) {
-  const { id } = params;
+  const { id } = await params;
+  const session = await auth();
+  const currentUser = session?.user as any;
+  const isEmployeeView = currentUser?.empCode === (await getAssessments().then(as => as.find(a => a.id === id)?.employeeId));
+
 
   // ดึงข้อมูล assessment
   const assessments = await getAssessments();
@@ -28,6 +35,7 @@ export default async function AssessmentSummaryPage({ params }: Props) {
   // ดึงข้อมูล employee
   const employees = await getEmployees();
   const employee = employees.find(e => e.empCode === assessment.employeeId);
+  const isEmployee = currentUser?.empCode === employee?.empCode;
 
   if (!employee) {
     return <div className="p-8 text-center text-red-600">Employee not found</div>;
@@ -41,19 +49,41 @@ export default async function AssessmentSummaryPage({ params }: Props) {
   const responseMap = new Map(responses.map(r => [r.questionId, r]));
 
   // คำนวณคะแนนเฉลี่ย
-  const calculateAverageScore = (field: 'scoreSelf' | 'scoreMgr' | 'scoreAppr2' | 'scoreGm') => {
+  const calculateAverageScore = (field: 'scoreSelf' | 'scoreMgr' | 'scoreGm' | 'scoreAppr1' | 'scoreAppr2' | 'scoreAppr3') => {
     const scores = responses
       .map(r => r[field])
       .filter((score): score is number => score !== undefined && score !== null);
-    
+
     if (scores.length === 0) return null;
     return (scores.reduce((sum, score) => sum + score, 0) / scores.length).toFixed(2);
   };
 
   const avgSelf = calculateAverageScore('scoreSelf');
-  const avgMgr = calculateAverageScore('scoreMgr');
+  const avgAppr1 = calculateAverageScore('scoreAppr1');
   const avgAppr2 = calculateAverageScore('scoreAppr2');
-  const avgGm = calculateAverageScore('scoreGm');
+  const avgAppr3 = calculateAverageScore('scoreAppr3');
+  // Manager/GM scores are ignored for display as per new requirement
+
+  // Calculate Weighted Scores for Table Footer
+  const weightedSelf = calculateWeightedScore(questions, responseMap, 'scoreSelf');
+  const weightedAppr1 = calculateWeightedScore(questions, responseMap, 'scoreAppr1');
+  const weightedAppr2 = calculateWeightedScore(questions, responseMap, 'scoreAppr2');
+  const weightedAppr3 = calculateWeightedScore(questions, responseMap, 'scoreAppr3');
+  // Weighted scores for Manager/GM removed
+
+  const rankSelf = weightedSelf ? calculateRank(weightedSelf) : null;
+  const rankAppr1 = weightedAppr1 ? calculateRank(weightedAppr1) : null;
+  const rankAppr2 = weightedAppr2 ? calculateRank(weightedAppr2) : null;
+  const rankAppr3 = weightedAppr3 ? calculateRank(weightedAppr3) : null;
+
+
+  // Calculate Final Result (Grand Result)
+  // Logic: Average of Approver 1, 2, 3 - Warning Penalty
+  const grandResult = calculateFinalResult(questions, responses, employee.warningCount);
+
+  // Note: This logic assumes if GM hasn't started, show Manager's result as interim "Grand Result"?
+  // Or should we only show if COMPLETED?
+  // User wants to see it. So showing best available is likely desired.
 
   const getScoreColor = (score?: number | string | null) => {
     if (score === undefined || score === null) return 'text-gray-400';
@@ -126,40 +156,29 @@ export default async function AssessmentSummaryPage({ params }: Props) {
               <p className="text-xs text-muted-foreground mt-1">/ 5.0</p>
             </div>
           )}
-          {avgMgr && (
+          {avgAppr1 && !isEmployee && (
             <div className="text-center p-4 bg-green-50 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">Manager</p>
-              <p className={`text-3xl font-bold ${getScoreColor(avgMgr)}`}>{avgMgr}</p>
+              <p className="text-sm text-muted-foreground mb-1">Approver 1</p>
+              <p className={`text-3xl font-bold ${getScoreColor(avgAppr1)}`}>{avgAppr1}</p>
               <p className="text-xs text-muted-foreground mt-1">/ 5.0</p>
-              {avgSelf && (() => {
-                const comp = getComparison(avgSelf, avgMgr);
-                if (comp) {
-                  const Icon = comp.icon;
-                  return (
-                    <div className={`flex items-center justify-center gap-1 mt-2 ${comp.color}`}>
-                      <Icon className="h-4 w-4" />
-                      <span className="text-sm font-medium">{comp.text}</span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
             </div>
           )}
-          {avgAppr2 && (
+          {avgAppr2 && !isEmployee && (
             <div className="text-center p-4 bg-yellow-50 rounded-lg">
               <p className="text-sm text-muted-foreground mb-1">Approver 2</p>
               <p className={`text-3xl font-bold ${getScoreColor(avgAppr2)}`}>{avgAppr2}</p>
               <p className="text-xs text-muted-foreground mt-1">/ 5.0</p>
             </div>
           )}
-          {avgGm && (
-            <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <p className="text-sm text-muted-foreground mb-1">GM (Final)</p>
-              <p className={`text-3xl font-bold ${getScoreColor(avgGm)}`}>{avgGm}</p>
+          {avgAppr3 && !isEmployee && (
+            <div className="text-center p-4 bg-purple-50 rounded-lg">
+              <p className="text-sm text-muted-foreground mb-1">Approver 3</p>
+              <p className={`text-3xl font-bold ${getScoreColor(avgAppr3)}`}>{avgAppr3}</p>
               <p className="text-xs text-muted-foreground mt-1">/ 5.0</p>
             </div>
           )}
+          {/* Show Mgr/GM only if they have scores (Legacy support or exceptional cases) */}
+          {/* Manager/GM Scores hidden by requirement */}
         </div>
       </Card>
 
@@ -172,15 +191,16 @@ export default async function AssessmentSummaryPage({ params }: Props) {
               <tr className="border-b">
                 <th className="text-left py-3 px-4">Question</th>
                 <th className="text-center py-3 px-4 bg-blue-50">Self</th>
-                {responses.some(r => r.scoreMgr !== null && r.scoreMgr !== undefined) && (
-                  <th className="text-center py-3 px-4 bg-green-50">Manager</th>
+                {!isEmployee && responses.some(r => r.scoreAppr1 !== null && r.scoreAppr1 !== undefined) && (
+                  <th className="text-center py-3 px-4 bg-green-50">Approver 1</th>
                 )}
-                {responses.some(r => r.scoreAppr2 !== null && r.scoreAppr2 !== undefined) && (
+                {!isEmployee && responses.some(r => r.scoreAppr2 !== null && r.scoreAppr2 !== undefined) && (
                   <th className="text-center py-3 px-4 bg-yellow-50">Approver 2</th>
                 )}
-                {responses.some(r => r.scoreGm !== null && r.scoreGm !== undefined) && (
-                  <th className="text-center py-3 px-4 bg-orange-50">GM</th>
+                {!isEmployee && responses.some(r => r.scoreAppr3 !== null && r.scoreAppr3 !== undefined) && (
+                  <th className="text-center py-3 px-4 bg-purple-50">Approver 3</th>
                 )}
+
               </tr>
             </thead>
             <tbody>
@@ -205,31 +225,62 @@ export default async function AssessmentSummaryPage({ params }: Props) {
                           {response.scoreSelf?.toFixed(1) || 'N/A'}
                         </span>
                       </td>
-                      {responses.some(r => r.scoreMgr !== null && r.scoreMgr !== undefined) && (
+                      {!isEmployee && responses.some(r => r.scoreAppr1 !== null && r.scoreAppr1 !== undefined) && (
                         <td className="text-center py-3 px-4">
-                          <span className={`text-lg font-bold ${getScoreColor(response.scoreMgr)}`}>
-                            {response.scoreMgr?.toFixed(1) || '-'}
+                          <span className={`text-lg font-bold ${getScoreColor(response.scoreAppr1)}`}>
+                            {response.scoreAppr1?.toFixed(1) || '-'}
                           </span>
                         </td>
                       )}
-                      {responses.some(r => r.scoreAppr2 !== null && r.scoreAppr2 !== undefined) && (
+                      {!isEmployee && responses.some(r => r.scoreAppr2 !== null && r.scoreAppr2 !== undefined) && (
                         <td className="text-center py-3 px-4">
                           <span className={`text-lg font-bold ${getScoreColor(response.scoreAppr2)}`}>
                             {response.scoreAppr2?.toFixed(1) || '-'}
                           </span>
                         </td>
                       )}
-                      {responses.some(r => r.scoreGm !== null && r.scoreGm !== undefined) && (
+                      {!isEmployee && responses.some(r => r.scoreAppr3 !== null && r.scoreAppr3 !== undefined) && (
                         <td className="text-center py-3 px-4">
-                          <span className={`text-lg font-bold ${getScoreColor(response.scoreGm)}`}>
-                            {response.scoreGm?.toFixed(1) || '-'}
+                          <span className={`text-lg font-bold ${getScoreColor(response.scoreAppr3)}`}>
+                            {response.scoreAppr3?.toFixed(1) || '-'}
                           </span>
                         </td>
                       )}
+
                     </tr>
                   );
                 })}
             </tbody>
+            <tfoot className="border-t-2 border-primary/20 bg-muted/50 font-semibold">
+              <tr>
+                <td className="py-3 px-4">Total Weighted Score</td>
+                <td className="text-center py-3 px-4">{weightedSelf?.toFixed(2) || '-'}</td>
+                {!isEmployee && responses.some(r => r.scoreAppr1 !== null && r.scoreAppr1 !== undefined) && (
+                  <td className="text-center py-3 px-4">{weightedAppr1?.toFixed(2) || '-'}</td>
+                )}
+                {!isEmployee && responses.some(r => r.scoreAppr2 !== null && r.scoreAppr2 !== undefined) && (
+                  <td className="text-center py-3 px-4">{weightedAppr2?.toFixed(2) || '-'}</td>
+                )}
+                {!isEmployee && responses.some(r => r.scoreAppr3 !== null && r.scoreAppr3 !== undefined) && (
+                  <td className="text-center py-3 px-4">{weightedAppr3?.toFixed(2) || '-'}</td>
+                )}
+
+              </tr>
+              <tr>
+                <td className="py-3 px-4">Grade (Pre-penalty)</td>
+                <td className="text-center py-3 px-4 text-lg text-primary">{rankSelf || '-'}</td>
+                {!isEmployee && responses.some(r => r.scoreAppr1 !== null && r.scoreAppr1 !== undefined) && (
+                  <td className="text-center py-3 px-4 text-lg text-primary">{rankAppr1 || '-'}</td>
+                )}
+                {!isEmployee && responses.some(r => r.scoreAppr2 !== null && r.scoreAppr2 !== undefined) && (
+                  <td className="text-center py-3 px-4 text-lg text-primary">{rankAppr2 || '-'}</td>
+                )}
+                {!isEmployee && responses.some(r => r.scoreAppr3 !== null && r.scoreAppr3 !== undefined) && (
+                  <td className="text-center py-3 px-4 text-lg text-primary">{rankAppr3 || '-'}</td>
+                )}
+
+              </tr>
+            </tfoot>
           </table>
         </div>
       </Card>
@@ -244,9 +295,9 @@ export default async function AssessmentSummaryPage({ params }: Props) {
               const response = responseMap.get(question.id);
               if (!response) return null;
 
-              const hasComments = response.commentSelf || response.commentMgr || 
-                                response.commentAppr2 || response.commentGm;
-              
+              const hasComments = response.commentSelf || response.commentMgr ||
+                response.commentAppr2 || response.commentGm;
+
               if (!hasComments) return null;
 
               return (
@@ -281,6 +332,78 @@ export default async function AssessmentSummaryPage({ params }: Props) {
                 </div>
               );
             })}
+        </div>
+      </Card>
+
+      {/* Grand Result & Ranking */}
+      {grandResult && (
+        <Card className="p-6 border-t-4 border-t-primary">
+          <h2 className="text-xl font-bold mb-6">Grand Result</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Score Breakdown */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <span className="text-muted-foreground">Weighted Total Score</span>
+                <span className="font-mono font-bold text-lg">{grandResult.totalScore.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg text-red-700">
+                <div>
+                  <span className="block font-medium">Warning Penalty</span>
+                  <span className="text-xs opacity-75">({employee.warningCount} warning{employee.warningCount !== 1 ? 's' : ''} × 0.5)</span>
+                </div>
+                <span className="font-mono font-bold text-lg">-{grandResult.warningDeduction.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center justify-between p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <span className="font-bold text-lg text-primary">Final Net Score</span>
+                <span className="font-mono font-bold text-2xl text-primary">{grandResult.netScore.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Rank Badge */}
+            <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-200">
+              <span className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">Final Rank</span>
+              <div className={`
+                w-24 h-24 flex items-center justify-center rounded-full text-5xl font-black shadow-lg
+                ${grandResult.rank === 'S' ? 'bg-purple-100 text-purple-600 border-4 border-purple-200' : ''}
+                ${grandResult.rank === 'A' ? 'bg-green-100 text-green-600 border-4 border-green-200' : ''}
+                ${grandResult.rank === 'B' ? 'bg-blue-100 text-blue-600 border-4 border-blue-200' : ''}
+                ${grandResult.rank === 'C' ? 'bg-yellow-100 text-yellow-600 border-4 border-yellow-200' : ''}
+                ${grandResult.rank === 'D' ? 'bg-red-100 text-red-600 border-4 border-red-200' : ''}
+              `}>
+                {grandResult.rank}
+              </div>
+              <p className="mt-4 text-sm text-muted-foreground text-center">
+                Based on score range:
+                {grandResult.rank === 'S' && ' 4.50 - 5.00'}
+                {grandResult.rank === 'A' && ' 4.00 - 4.49'}
+                {grandResult.rank === 'B' && ' 3.00 - 3.99'}
+                {grandResult.rank === 'C' && ' 2.00 - 2.99'}
+                {grandResult.rank === 'D' && ' 1.00 - 1.99'}
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Signature Section (Static Placeholder) */}
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold mb-6">Signatures</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="border rounded-lg p-8 text-center bg-gray-50/50">
+            <div className="w-full border-b border-gray-300 h-16 mb-2"></div>
+            <p className="text-sm font-medium">Employee</p>
+            <p className="text-xs text-muted-foreground mt-1">Date: ____/____/____</p>
+          </div>
+          <div className="border rounded-lg p-8 text-center bg-gray-50/50">
+            <div className="w-full border-b border-gray-300 h-16 mb-2"></div>
+            <p className="text-sm font-medium">Manager</p>
+            <p className="text-xs text-muted-foreground mt-1">Date: ____/____/____</p>
+          </div>
+          <div className="border rounded-lg p-8 text-center bg-gray-50/50">
+            <div className="w-full border-b border-gray-300 h-16 mb-2"></div>
+            <p className="text-sm font-medium">GM</p>
+            <p className="text-xs text-muted-foreground mt-1">Date: ____/____/____</p>
+          </div>
         </div>
       </Card>
     </div>

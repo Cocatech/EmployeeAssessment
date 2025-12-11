@@ -24,6 +24,7 @@ export interface UserProfile extends User {
 export interface Employee {
   empCode: string; // Title field
   empName_Eng: string;
+  profileImage?: string | null; // URL to profile image
   empName_Thai?: string; // Thai name
   email: string | null;
   phoneNumber?: string; // Contact number
@@ -35,7 +36,8 @@ export interface Employee {
   approver1_ID: string | null;
   approver2_ID: string | null;
   approver3_ID?: string | null; // Optional 3rd approver
-  gm_ID: string;
+  manager_ID?: string | null; // Manager (Applied by Manager)
+  gm_ID: string; // GM (Confirmed by GM)
   joinDate: string; // YYYY-MM-DD format
   warningCount: number;
   isActive: boolean;
