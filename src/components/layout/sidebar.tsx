@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { 
-  LayoutDashboard, 
-  Users, 
-  ClipboardCheck, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Users,
+  ClipboardCheck,
+  Settings,
   LogOut,
   ChevronLeft,
   Menu,
@@ -28,7 +28,6 @@ const allNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/employees', label: 'Employees', icon: Users, requirePermission: true },
   { href: '/dashboard/assessments', label: 'Assessments', icon: ClipboardCheck },
-  { href: '/dashboard/users', label: 'Users', icon: UserCog, requirePermission: true },
   { href: '/dashboard/delegations', label: 'Delegations', icon: UserCog, requirePermission: true },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, requirePermission: true },
 ];
@@ -91,7 +90,7 @@ export function Sidebar() {
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          
+
           return (
             <Link
               key={item.href}

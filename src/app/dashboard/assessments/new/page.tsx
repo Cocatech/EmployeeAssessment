@@ -6,27 +6,29 @@ import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getAssessmentTypes } from '@/actions/settings';
+import { getAssessmentLevels } from '@/actions/levels';
 
-export const metadata = {
-  title: 'Create New Assessment | TRTH Assessment',
-  description: 'Create a new employee assessment',
-};
+/* ... imports ... */
 
 export default async function NewAssessmentPage() {
   const session = await auth();
-  
+
   if (!session?.user) {
     redirect('/auth/signin');
   }
 
   const currentUser = session.user as any;
   const empCode = currentUser?.empCode || 'ADMIN';
-  
-  // Fetch assessment types from database
-  const assessmentTypes = await getAssessmentTypes();
+
+  // Fetch assessment types and levels from database
+  const [assessmentTypes, levels] = await Promise.all([
+    getAssessmentTypes(),
+    getAssessmentLevels()
+  ]);
 
   return (
     <div className="space-y-6">
+      {/* ... header ... */}
       <div className="flex items-center gap-2">
         <Link href="/dashboard/assessments">
           <Button variant="ghost" size="sm">
@@ -43,7 +45,11 @@ export default async function NewAssessmentPage() {
         </p>
       </div>
 
-      <AssessmentCreationForm assessorId={empCode} assessmentTypes={assessmentTypes} />
+      <AssessmentCreationForm
+        assessorId={empCode}
+        assessmentTypes={assessmentTypes}
+        levels={levels}
+      />
     </div>
   );
 }

@@ -7,14 +7,14 @@ import { AssessmentQuestion } from '@/types/assessment';
 /**
  * Get all questions with optional filters
  */
-export async function getQuestions(params?: { 
-  level?: string; 
+export async function getQuestions(params?: {
+  level?: string;
   category?: string;
   isActive?: boolean;
 }): Promise<AssessmentQuestion[]> {
   try {
     const where: any = {};
-    
+
     if (params?.level) where.applicableLevel = params.level;
     if (params?.category) where.category = params.category;
     if (params?.isActive !== undefined) where.isActive = params.isActive;
@@ -134,6 +134,36 @@ export async function getQuestion(id: string) {
 }
 
 /**
+ * Get template questions for assessment creation (from DB)
+ */
+export async function getTemplateQuestions(level: string) {
+  try {
+    const questions = await prisma.assessmentQuestion.findMany({
+      where: {
+        isActive: true, // Only fetch active questions
+        applicableLevel: level
+      },
+      orderBy: [
+        { category: 'asc' },
+        { order: 'asc' }
+      ]
+    });
+
+    return questions.map(q => ({
+      questionTitle: q.questionTitle,
+      description: q.description || '',
+      category: q.category,
+      weight: q.weight,
+      maxScore: q.maxScore,
+      order: q.order
+    }));
+  } catch (error) {
+    console.error(`Error fetching template questions for level ${level}:`, error);
+    return [];
+  }
+}
+
+/**
  * Create a new question
  */
 export async function createQuestion(data: Omit<AssessmentQuestion, 'id' | 'createdAt' | 'updatedAt'>) {
@@ -150,7 +180,7 @@ export async function createQuestion(data: Omit<AssessmentQuestion, 'id' | 'crea
         isActive: data.isActive !== false,
       },
     });
-    
+
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
     return { success: true, id: result.id };
@@ -166,7 +196,7 @@ export async function createQuestion(data: Omit<AssessmentQuestion, 'id' | 'crea
 export async function updateQuestion(id: string, data: Partial<AssessmentQuestion>) {
   try {
     const updateData: any = {};
-    
+
     if (data.questionTitle !== undefined) updateData.questionTitle = data.questionTitle;
     if (data.description !== undefined) updateData.description = data.description || null;
     if (data.category !== undefined) updateData.category = data.category;
@@ -180,7 +210,7 @@ export async function updateQuestion(id: string, data: Partial<AssessmentQuestio
       where: { id },
       data: updateData,
     });
-    
+
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
     return { success: true };
@@ -198,13 +228,38 @@ export async function deleteQuestion(id: string) {
     await prisma.assessmentQuestion.delete({
       where: { id },
     });
-    
+
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
     return { success: true };
   } catch (error) {
     console.error('Error deleting question:', error);
     return { success: false, error: 'Failed to delete question' };
+  }
+}
+
+/**
+ * Delete multiple questions (Bulk Delete)
+ */
+export async function deleteQuestions(ids: string[]) {
+  try {
+    const result = await prisma.assessmentQuestion.deleteMany({
+      where: {
+        id: { in: ids }
+      },
+    });
+
+    revalidatePath('/admin/questions');
+    revalidatePath('/dashboard/questions');
+    revalidatePath('/dashboard/settings/assessment-questions');
+    return { success: true, count: result.count };
+  } catch (error) {
+    console.error('Error deleting questions:', error);
+    // Prisma P2003 is FK constraint violation
+    if ((error as any).code === 'P2003') {
+      return { success: false, error: 'Cannot delete questions that have already been answered or used in assessments.' };
+    }
+    return { success: false, error: 'Failed to delete questions' };
   }
 }
 
@@ -225,7 +280,7 @@ export async function toggleQuestionStatus(id: string) {
       where: { id },
       data: { isActive: !question.isActive },
     });
-    
+
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
     return { success: true };

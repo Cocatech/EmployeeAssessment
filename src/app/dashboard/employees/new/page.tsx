@@ -59,6 +59,7 @@ export default async function NewEmployeePage() {
           groups={groups}
           teams={teams}
           allEmployees={employees}
+          currentUser={session.user}
         />
       </Card>
     </div>

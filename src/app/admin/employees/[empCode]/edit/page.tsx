@@ -14,11 +14,14 @@ export const metadata = {
 };
 
 export default async function EditEmployeePage({
-  params
+  params,
+  searchParams,
 }: {
-  params: Promise<{ empCode: string }>
+  params: Promise<{ empCode: string }>;
+  searchParams: Promise<{ returnUrl?: string }>;
 }) {
   const { empCode } = await params;
+  const { returnUrl } = await searchParams;
 
   const session = await auth();
 
@@ -37,6 +40,9 @@ export default async function EditEmployeePage({
 
   const employee = await prisma.employee.findUnique({
     where: { empCode },
+    include: {
+      user: true, // Pass user data to form
+    }
   });
 
   if (!employee) {
@@ -58,7 +64,7 @@ export default async function EditEmployeePage({
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2 mb-4">
-        <Link href={`/admin/employees/${empCode}`}>
+        <Link href={returnUrl || `/admin/employees/${empCode}`}>
           <Button variant="outline" size="icon">
             <ArrowLeft className="h-4 w-4" />
           </Button>
@@ -77,6 +83,8 @@ export default async function EditEmployeePage({
           positions={positions}
           groups={groups}
           teams={teams}
+          currentUser={currentUser}
+          returnUrl={returnUrl}
         />
       </Card>
     </div>

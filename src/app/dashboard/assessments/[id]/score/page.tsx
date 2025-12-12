@@ -1,6 +1,6 @@
 import ScoringForm from '@/components/assessment/ScoringForm';
-import { getAssessments } from '@/actions/assessments';
-import { getEmployees } from '@/actions/employees';
+import { getAssessment } from '@/actions/assessments';
+import { getEmployee } from '@/actions/employees';
 import { getQuestionsByLevel } from '@/actions/questions';
 import { getResponsesByAssessment } from '@/actions/responses';
 import { notFound, redirect } from 'next/navigation';
@@ -15,12 +15,13 @@ export default async function AssessmentScoringPage({ params }: Props) {
   const { id } = await params;
 
   // ดึงข้อมูล assessment
-  const assessments = await getAssessments();
-  const assessment = assessments.find(a => a.id === id);
+  const assessResult = await getAssessment(id);
 
-  if (!assessment) {
+  if (!assessResult.success || !assessResult.data) {
     notFound();
   }
+
+  const assessment = assessResult.data;
 
   // ตรวจสอบว่าเป็น DRAFT หรือไม่
   // if (assessment.status !== 'DRAFT') {
@@ -28,12 +29,13 @@ export default async function AssessmentScoringPage({ params }: Props) {
   // }
 
   // ดึงข้อมูล employee
-  const employees = await getEmployees();
-  const employee = employees.find(e => e.empCode === assessment.employeeId);
+  const empResult = await getEmployee(assessment.employeeId);
 
-  if (!employee) {
+  if (!empResult.success || !empResult.data) {
     return <div className="p-8 text-center text-red-600">Employee not found</div>;
   }
+
+  const employee = empResult.data;
 
   // ดึงคำถามตามระดับของพนักงาน
   const questions = await getQuestionsByLevel(employee.assessmentLevel);
@@ -44,17 +46,10 @@ export default async function AssessmentScoringPage({ params }: Props) {
   return (
     <div className="container mx-auto py-6">
       <ScoringForm
-        assessmentId={id}
+        assessment={assessment}
+        employee={employee}
         questions={questions}
         existingResponses={responses}
-        assessmentStatus={assessment.status}
-        employee={{
-          empCode: employee.empCode,
-          empName_Eng: employee.empName_Eng,
-          position: employee.position,
-          group: employee.group,
-          profileImage: employee.profileImage,
-        }}
       />
     </div>
   );

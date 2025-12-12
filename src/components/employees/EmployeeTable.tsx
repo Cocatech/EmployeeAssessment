@@ -4,15 +4,15 @@ import { useState } from 'react';
 import { Employee } from '@/types';
 import { Button } from '@/components/ui/button';
 import { deleteEmployee } from '@/actions/employees';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Edit, 
-  Trash2, 
-  Eye, 
-  Mail, 
-  Phone, 
-  Briefcase, 
+import {
+  Edit,
+  Trash2,
+  Eye,
+  Mail,
+  Phone,
+  Briefcase,
   Building,
   Calendar,
   User
@@ -24,6 +24,7 @@ interface EmployeeTableProps {
 
 export function EmployeeTable({ employees }: EmployeeTableProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (empCode: string) => {
@@ -86,11 +87,10 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
                 <td className="py-3 px-4 text-sm">{employee.group}</td>
                 <td className="py-3 px-4">
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      employee.employeeType === 'Permanent'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-orange-100 text-orange-800'
-                    }`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${employee.employeeType === 'Permanent'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-orange-100 text-orange-800'
+                      }`}
                   >
                     {employee.employeeType}
                   </span>
@@ -109,12 +109,12 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center justify-end gap-2">
-                    <Link href={`/admin/employees/${employee.empCode}`}>
+                    <Link href={`${pathname}/${employee.empCode}`}>
                       <Button variant="ghost" size="sm">
                         <Eye className="h-4 w-4" />
                       </Button>
                     </Link>
-                    <Link href={`/admin/employees/${employee.empCode}/edit`}>
+                    <Link href={`/admin/employees/${employee.empCode}/edit?returnUrl=${pathname}`}>
                       <Button variant="ghost" size="sm">
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -155,11 +155,10 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
                 )}
               </div>
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                  employee.employeeType === 'Permanent'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-orange-100 text-orange-800'
-                }`}
+                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${employee.employeeType === 'Permanent'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-orange-100 text-orange-800'
+                  }`}
               >
                 {employee.employeeType}
               </span>
@@ -200,13 +199,13 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
             </div>
 
             <div className="flex items-center gap-2 pt-2 border-t">
-              <Link href={`/admin/employees/${employee.empCode}`} className="flex-1">
+              <Link href={`${pathname}/${employee.empCode}`} className="flex-1">
                 <Button variant="outline" size="sm" className="w-full">
                   <Eye className="h-4 w-4 mr-2" />
                   View
                 </Button>
               </Link>
-              <Link href={`/admin/employees/${employee.empCode}/edit`} className="flex-1">
+              <Link href={`/admin/employees/${employee.empCode}/edit?returnUrl=${pathname}`} className="flex-1">
                 <Button variant="outline" size="sm" className="w-full">
                   <Edit className="h-4 w-4 mr-2" />
                   Edit

@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Save, Send, AlertCircle } from 'lucide-react';
+import { Save, Send, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
 interface Question {
@@ -22,30 +21,25 @@ interface Response {
   questionId: string;
   scoreSelf?: number;
   commentSelf?: string;
+  // Approver scores for display (optional)
+  scoreAppr1?: number;
+  scoreAppr2?: number;
+  scoreAppr3?: number;
 }
 
-interface Employee {
-  empCode: string;
-  empName_Eng: string;
-  position: string;
-  group: string;
-  profileImage?: string | null;
-}
-
+// Loosely typed to match data passed from server
 interface ScoringPageProps {
-  assessmentId: string;
+  assessment: any;
+  employee: any;
   questions: Question[];
   existingResponses: any[];
-  assessmentStatus: string;
-  employee: Employee;
 }
 
 export default function ScoringForm({
-  assessmentId,
+  assessment,
+  employee,
   questions,
-  existingResponses,
-  assessmentStatus,
-  employee
+  existingResponses
 }: ScoringPageProps) {
   const router = useRouter();
   const [responses, setResponses] = useState<Record<string, Response>>({});
@@ -53,6 +47,24 @@ export default function ScoringForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Helper to format dates
+  const formatDate = (dateString: string | Date) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleDateString('en-GB');
+  };
+
+  // Check draft status
+  const isDraft = assessment.status === 'DRAFT' || assessment.status === 'Draft';
+
+  // Display helpers
+  const displayName = isDraft ? 'TEMPLATE / DRAFT' : employee.empName_Eng;
+  const displayEmpCode = isDraft ? 'N/A' : employee.empCode;
+  const displayPosition = isDraft ? 'N/A' : employee.position;
+  const displayGroup = isDraft ? 'N/A' : employee.group;
+  const displayLevel = isDraft ? (assessment.targetLevel || 'See Target Level') : employee.assessmentLevel;
+  const displayJoinDate = isDraft ? '-' : formatDate(employee.joinDate);
+  const profileImage = !isDraft && employee.profileImage ? employee.profileImage : '/placeholder-user.jpg';
 
   // Load existing responses
   useEffect(() => {
@@ -62,14 +74,30 @@ export default function ScoringForm({
         questionId: resp.questionId,
         scoreSelf: resp.scoreSelf,
         commentSelf: resp.commentSelf,
+        scoreAppr1: resp.scoreAppr1,
+        scoreAppr2: resp.scoreAppr2,
+        scoreAppr3: resp.scoreAppr3,
       };
     });
     setResponses(responseMap);
   }, [existingResponses]);
 
-  const handleScoreChange = (questionId: string, score: string) => {
-    const numScore = parseFloat(score);
-    if (numScore >= 0 && numScore <= 5) {
+  const handleScoreChange = (questionId: string, value: string) => {
+    // Allow empty string to clear input
+    if (value === '') {
+      setResponses(prev => ({
+        ...prev,
+        [questionId]: {
+          ...prev[questionId],
+          questionId,
+          scoreSelf: undefined, // undefined implies incomplete
+        }
+      }));
+      return;
+    }
+
+    const numScore = parseFloat(value);
+    if (!isNaN(numScore) && numScore >= 0 && numScore <= 5) {
       setResponses(prev => ({
         ...prev,
         [questionId]: {
@@ -93,7 +121,6 @@ export default function ScoringForm({
   };
 
   const validateResponses = (): boolean => {
-    // Check if all questions have scores
     const unanswered = questions.filter(q => {
       const response = responses[q.id];
       return !response || response.scoreSelf === undefined || response.scoreSelf === null;
@@ -103,7 +130,6 @@ export default function ScoringForm({
       setError(`Please score all questions. ${unanswered.length} question(s) remaining.`);
       return false;
     }
-
     return true;
   };
 
@@ -114,7 +140,7 @@ export default function ScoringForm({
 
     try {
       const responseData = Object.values(responses).map(resp => ({
-        assessmentId,
+        assessmentId: assessment.id,
         questionId: resp.questionId,
         scoreSelf: resp.scoreSelf,
         commentSelf: resp.commentSelf || '',
@@ -144,13 +170,17 @@ export default function ScoringForm({
       return;
     }
 
+    if (!confirm('Are you sure you want to submit? You will not be able to edit after submission.')) {
+      return;
+    }
+
     setIsSubmitting(true);
     setError('');
 
     try {
       // Save responses first
       const responseData = Object.values(responses).map(resp => ({
-        assessmentId,
+        assessmentId: assessment.id,
         questionId: resp.questionId,
         scoreSelf: resp.scoreSelf,
         commentSelf: resp.commentSelf || '',
@@ -170,11 +200,11 @@ export default function ScoringForm({
       const submitResponse = await fetch('/api/assessment/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assessmentId }),
+        body: JSON.stringify({ assessmentId: assessment.id }),
       });
 
       if (submitResponse.ok) {
-        router.push(`/dashboard/assessments/${assessmentId}?submitted=true`);
+        router.push(`/dashboard/assessments/${assessment.id}?submitted=true`);
         router.refresh();
       } else {
         setError('Failed to submit assessment');
@@ -186,228 +216,324 @@ export default function ScoringForm({
     }
   };
 
-  const getScoreColor = (score?: number) => {
-    if (score === undefined || score === null) return 'text-gray-400';
-    if (score >= 4.5) return 'text-green-600';
-    if (score >= 3.5) return 'text-blue-600';
-    if (score >= 2.5) return 'text-yellow-600';
-    return 'text-red-600';
-  };
+  const totalWeight = questions.reduce((sum, q) => sum + (q.weight || 0), 0);
 
-  const calculateProgress = () => {
-    const answered = questions.filter(q => {
-      const response = responses[q.id];
-      return response && response.scoreSelf !== undefined && response.scoreSelf !== null;
-    }).length;
-    return Math.round((answered / questions.length) * 100);
-  };
-
-  // Employee can edit when status is Draft (admin editing), Assigned (start assessment), or IN_PROGRESS
+  // Editable check
+  // Employee can edit when status is Draft (admin) or Assigned/InProgress (user)
   const editableStatuses = ['DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'INPROGRESS'];
-  const isReadOnly = !editableStatuses.includes(assessmentStatus.toUpperCase());
+  const isReadOnly = !editableStatuses.includes(assessment.status.toUpperCase());
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link href={`/dashboard/assessments/${assessmentId}`}>
-            <Button variant="outline" size="icon">
-              <ArrowLeft className="h-4 w-4" />
+    <div className="min-h-screen bg-slate-100 py-8">
+      {/* Action Bar */}
+      <div className="max-w-[210mm] mx-auto mb-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href={`/dashboard/assessments/${assessment.id}`}>
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back
             </Button>
           </Link>
-          <div className="flex items-center gap-4">
-            {employee.profileImage ? (
-              <div className="h-12 w-12 rounded-full overflow-hidden border">
-                <img src={employee.profileImage} alt="Employee" className="h-full w-full object-cover" />
-              </div>
-            ) : (
-              <div className="h-12 w-12 rounded-full bg-slate-200 flex items-center justify-center font-bold text-slate-500">
-                {employee.empName_Eng.charAt(0)}
-              </div>
-            )}
-            <div>
-              <h1 className="text-2xl font-bold">Self Assessment</h1>
-              <p className="text-sm text-muted-foreground">
-                Rate yourself on each criteria (0-5 scale)
-              </p>
+          {error && (
+            <div className="text-red-600 text-sm flex items-center gap-2 bg-red-50 px-3 py-1 rounded border border-red-200">
+              <AlertCircle className="h-4 w-4" /> {error}
             </div>
-          </div>
+          )}
+          {successMessage && (
+            <div className="text-green-600 text-sm flex items-center gap-2 bg-green-50 px-3 py-1 rounded border border-green-200">
+              ✓ {successMessage}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {!isReadOnly && (
+            <>
+              <Button variant="outline" onClick={handleSaveDraft} disabled={isSaving || isSubmitting}>
+                {isSaving ? 'Saving...' : 'Save Draft'}
+              </Button>
+              <Button onClick={handleSubmit} disabled={isSaving || isSubmitting}>
+                {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Progress Bar */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Progress</span>
-          <span className="text-sm text-muted-foreground">
-            {calculateProgress()}% Complete ({Object.keys(responses).filter(k => responses[k].scoreSelf !== undefined).length} / {questions.length})
-          </span>
+      {/* Main Form Sheet */}
+      <div className="bg-white p-8 mx-auto max-w-[210mm] shadow-lg text-xs text-black font-sans">
+
+        {/* Header Row */}
+        <div className="flex justify-between items-end border-b-2 border-orange-500 pb-2 mb-2">
+          <div className="flex items-center gap-2">
+            <img
+              src="/logo.png"
+              alt="Logo"
+              className="h-10 w-auto object-contain"
+              onError={(e) => e.currentTarget.style.display = 'none'}
+            />
+            <div className="hidden font-bold text-lg text-slate-700">TOKYO RIKA</div>
+          </div>
+          <div className="font-bold text-lg">PERSONNEL EVALUATION SHEET</div>
+          <div className="text-[10px] text-right">
+            <div>Confidential</div>
+            <div>Ref: {assessment.id.substring(0, 8)}</div>
+          </div>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div
-            className="bg-primary h-2 rounded-full transition-all"
-            style={{ width: `${calculateProgress()}%` }}
-          />
+
+        {/* Employee Info Grid */}
+        <div className="border-2 border-orange-500 mb-6">
+          <div className="grid grid-cols-[1fr_120px] gap-0">
+            {/* Info Fields */}
+            <div className="grid grid-cols-4 border-r border-slate-300">
+              {/* Row 1 */}
+              <div className="bg-orange-100 p-2 border-b border-r border-slate-300 font-semibold flex items-center">Period</div>
+              <div className="p-2 border-b border-r border-slate-300 col-span-3 flex items-center">
+                {formatDate(assessment.periodStart)} - {formatDate(assessment.periodEnd)}
+              </div>
+
+              {/* Row 2 */}
+              <div className="bg-orange-100 p-2 border-b border-r border-slate-300 font-semibold flex items-center">Emp ID</div>
+              <div className="p-2 border-b border-r border-slate-300 flex items-center font-mono">{displayEmpCode}</div>
+              <div className="bg-orange-100 p-2 border-b border-r border-slate-300 font-semibold flex items-center">Name</div>
+              <div className="p-2 border-b border-slate-300 flex items-center font-bold px-2 text-sm">{displayName}</div>
+
+              {/* Row 3 */}
+              <div className="bg-orange-100 p-2 border-b border-r border-slate-300 font-semibold flex items-center">Department</div>
+              <div className="p-2 border-b border-r border-slate-300 flex items-center">{displayGroup}</div>
+              <div className="bg-orange-100 p-2 border-b border-r border-slate-300 font-semibold flex items-center">Position</div>
+              <div className="p-2 border-b border-slate-300 flex items-center">{displayPosition}</div>
+
+              {/* Row 4 */}
+              <div className="bg-orange-100 p-2 border-r border-slate-300 font-semibold flex items-center">Level</div>
+              <div className="p-2 border-r border-slate-300 flex items-center">{displayLevel}</div>
+              <div className="bg-orange-100 p-2 border-r border-slate-300 font-semibold flex items-center">Join Date</div>
+              <div className="p-2 border-slate-300 flex items-center">{displayJoinDate}</div>
+            </div>
+
+            {/* Photo Section */}
+            <div className="flex items-center justify-center p-2 bg-slate-50">
+              <div className="w-20 h-24 border border-slate-300 bg-white flex items-center justify-center overflow-hidden">
+                <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
+              </div>
+            </div>
+          </div>
         </div>
-      </Card>
 
-      {/* Messages */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center gap-2">
-          <AlertCircle className="h-4 w-4" />
-          {error}
+        {/* Rating Guide */}
+        <div className="border border-black mb-6 text-[10px]">
+          <div className="grid grid-cols-5 divide-x divide-black text-center bg-slate-50">
+            <div className="p-2"><b className="block text-lg">1</b>Needs Improvement</div>
+            <div className="p-2"><b className="block text-lg">2</b>Fair</div>
+            <div className="p-2"><b className="block text-lg">3</b>Good</div>
+            <div className="p-2"><b className="block text-lg">4</b>Very Good</div>
+            <div className="p-2"><b className="block text-lg">5</b>Excellent</div>
+          </div>
         </div>
-      )}
 
-      {successMessage && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
-          {successMessage}
-        </div>
-      )}
+        {/* Assessment Table */}
+        <table className="w-full border-collapse border border-black text-[11px]">
+          <thead>
+            <tr className="bg-white text-center text-xs">
+              {/* No Column */}
+              <th rowSpan={3} className="border border-black p-1 w-8 bg-slate-50">No</th>
 
-      {isReadOnly && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-md">
-          This assessment has been submitted and cannot be edited.
-        </div>
-      )}
+              {/* Item */}
+              <th rowSpan={3} className="border border-black p-2 bg-slate-50">
+                <div>評価項目</div>
+                <div>หัวข้อการประเมิน</div>
+              </th>
 
-      {/* Questions */}
-      <div className="space-y-4">
-        {questions
-          .sort((a, b) => a.order - b.order)
-          .map((question, index) => {
-            const response = responses[question.id] || {};
+              {/* Definition */}
+              <th rowSpan={3} className="border border-black p-2 bg-slate-50 w-1/3">
+                <div>評価項目の定義</div>
+                <div>คำอธิบายหัวข้อการประเมิน</div>
+              </th>
 
-            return (
-              <Card key={question.id} className="p-6">
-                <div className="space-y-4">
-                  {/* Question Header */}
-                  <div>
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Question {index + 1}
-                          </span>
-                          <span className="text-xs px-2 py-0.5 bg-muted rounded">
-                            {question.category}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Weight: {question.weight}%
-                          </span>
-                        </div>
-                        <h3 className="text-lg font-semibold mt-1">
-                          {question.questionTitle}
-                        </h3>
-                        {question.description && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {question.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+              {/* Self Evaluation */}
+              <th rowSpan={3} className="border border-black p-1 w-16 bg-slate-50 vertical-text">
+                <div className="flex flex-col items-center justify-center h-full gap-1">
+                  <div>自己評価</div>
+                  <div className="text-[10px]">พนักงานประเมิน<br />ตนเอง</div>
+                </div>
+              </th>
 
-                  {/* Score Input */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Your Score (0-5) <span className="text-red-500">*</span>
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Input
+              {/* Evaluation Result (Group) */}
+              <th colSpan={3} className="border border-black p-1 bg-slate-50">
+                <div>考課結果</div>
+                <div>ผลการประเมิน</div>
+              </th>
+            </tr>
+            {/* Evaluator Levels Row */}
+            <tr className="bg-white text-center text-[10px]">
+              <th className="border border-black p-1 w-20">
+                <div>一次考課</div>
+                <div>ผู้ประเมินคนที่ 1</div>
+              </th>
+              <th className="border border-black p-1 w-20">
+                <div>二次考課</div>
+                <div>ผู้ประเมินคนที่ 2</div>
+              </th>
+              <th className="border border-black p-1 w-20">
+                <div>三次考課</div>
+                <div>ผู้ประเมินคนที่ 3</div>
+              </th>
+            </tr>
+            {/* Position Row */}
+            <tr className="bg-white text-center text-[10px]">
+              <th className="border border-black p-1 font-normal text-slate-500">Position</th>
+              <th className="border border-black p-1 font-normal text-slate-500">Position</th>
+              <th className="border border-black p-1 font-normal text-slate-500">Position</th>
+            </tr>
+          </thead>
+          <tbody>
+            {questions.length === 0 ? (
+              <tr><td colSpan={7} className="p-8 text-center border border-black italic">No questions configured.</td></tr>
+            ) : (
+              questions.sort((a, b) => a.order - b.order).map((q, idx) => {
+                const response = responses[q.id] || {};
+                const isHeader = idx === 0 || questions[idx - 1]?.category !== q.category;
+
+                return (
+                  <>
+                    {isHeader && (
+                      <tr key={`h-${q.category}`}>
+                        <td colSpan={7} className="border border-black bg-slate-100 font-bold p-2 uppercase tracking-wide">
+                          {q.category}
+                        </td>
+                      </tr>
+                    )}
+                    <tr key={q.id}>
+                      <td className="border border-black text-center p-2 align-top">{idx + 1}</td>
+                      <td className="border border-black p-2 align-top font-semibold">
+                        {q.questionTitle}
+                      </td>
+                      <td className="border border-black p-2 align-top text-slate-600">
+                        {q.description}
+                      </td>
+
+                      {/* Editable Self Score */}
+                      <td className="border border-black p-2 align-top bg-blue-50">
+                        <input
                           type="number"
                           min="0"
                           max="5"
-                          step="0.5"
+                          step="1" // Step 1 for integer scores as per image usually, but kept flexible
                           value={response.scoreSelf ?? ''}
-                          onChange={(e) => handleScoreChange(question.id, e.target.value)}
+                          onChange={(e) => handleScoreChange(q.id, e.target.value)}
                           disabled={isReadOnly}
-                          className="w-24"
-                          placeholder="0.0"
+                          className="w-full text-center p-1 border border-slate-300 rounded focus:border-blue-500 font-bold text-lg"
                         />
-                        <span className="text-sm text-muted-foreground">/ 5.0</span>
-                        {response.scoreSelf !== undefined && (
-                          <span className={`text-lg font-bold ml-2 ${getScoreColor(response.scoreSelf)}`}>
-                            {response.scoreSelf.toFixed(1)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        0 = Poor, 1-2 = Below Average, 3 = Average, 4 = Good, 5 = Excellent
-                      </p>
-                    </div>
-                  </div>
+                      </td>
 
-                  {/* Comment Input */}
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">
-                      Your Comment (Optional)
-                    </label>
-                    <textarea
-                      value={response.commentSelf ?? ''}
-                      onChange={(e) => handleCommentChange(question.id, e.target.value)}
-                      disabled={isReadOnly}
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background min-h-[80px]"
-                      placeholder="Explain your rating, provide examples of your achievements..."
-                    />
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
+                      {/* Read Only Approver Scores */}
+                      <td className="border border-black text-center p-2 align-top pt-3 text-slate-400">
+                        {response.scoreAppr1 ?? '-'}
+                      </td>
+                      <td className="border border-black text-center p-2 align-top pt-3 text-slate-400 bg-slate-50">
+                        {response.scoreAppr2 ?? '-'}
+                      </td>
+                      <td className="border border-black text-center p-2 align-top pt-3 text-slate-400 bg-slate-50">
+                        {response.scoreAppr3 ?? '-'}
+                      </td>
+                    </tr>
+                  </>
+                );
+              })
+            )}
+            {/* Total Row */}
+            <tr className="bg-orange-100 font-bold border-t-2 border-black">
+              <td colSpan={3} className="border border-black p-2 text-right">TOTAL</td>
+              <td className="border border-black p-2 text-center bg-blue-100">
+                {/* Calculate Self Total - Simple Average or Weighted? Usually Weighted Sum. 
+                            If Question Weight is percent of total (e.g. 100), then:
+                            Score * (Weight/100)? Or just Score avg? 
+                            Usually it's (Sum(Score * Weight) / Sum(Weight)) if weights are absolute.
+                            For now, let's leave blank or simple avg if requested. 
+                            The original view left it blank. I will leave it blank to be safe.
+                         */}
+              </td>
+              <td className="border border-black p-2 text-center"></td>
+              <td className="border border-black p-2 text-center"></td>
+              <td className="border border-black p-2 text-center"></td>
+            </tr>
+          </tbody>
+        </table>
+
       </div>
 
-      {/* Actions */}
-      {!isReadOnly && (
-        <Card className="p-6 sticky bottom-4 bg-background shadow-lg">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              {calculateProgress() === 100 ? (
-                <span className="text-green-600 font-medium">✓ All questions answered</span>
-              ) : (
-                <span>Complete all questions to submit</span>
-              )}
+      {/* Evaluation Summary & Signatures Section - Mimicking Page 2 / Bottom Section */}
+      <div className="bg-white p-8 mx-auto max-w-[210mm] mt-8 shadow-lg text-xs text-black font-sans">
+        <div className="border-b-2 border-orange-500 mb-4 font-bold text-lg">EVALUATION SUMMARY & COMMENTS</div>
+
+        <div className="space-y-0 border-t border-l border-black">
+          {[
+            {
+              title: "1st Evaluator",
+              user: isDraft ? "Supervisor" : (employee.approver1_Name || '-'),
+              code: employee.approver1_ID,
+              date: assessment.approver1Date,
+              goodPoints: "Good Points (ข้อดี)",
+              improvePoints: "Points for Improvement (จุดที่ต้องปรับปรุง)"
+            },
+            {
+              title: "2nd Evaluator",
+              user: isDraft ? "Manager" : (employee.approver2_Name || '-'),
+              code: employee.approver2_ID,
+              date: assessment.approver2Date,
+              goodPoints: "Good Points (ข้อดี)",
+              improvePoints: "Points for Improvement (จุดที่ต้องปรับปรุง)"
+            },
+            {
+              title: "Final Evaluator",
+              user: isDraft ? "GM / MD" : (employee.gm_Name || employee.approver3_Name || '-'),
+              code: employee.gm_ID || employee.approver3_ID,
+              date: assessment.mdDate || assessment.approver3Date,
+              goodPoints: "Good Points (ข้อดี)",
+              improvePoints: "Points for Improvement (จุดที่ต้องปรับปรุง)"
+            }
+          ].map((evaluator, i) => (
+            <div key={i} className="flex h-[200px] border-b border-r border-black">
+              {/* Left Column: Info & Signature */}
+              <div className="w-[200px] border-r border-black p-2 flex flex-col justify-between shrink-0 bg-slate-50">
+                <div>
+                  <div className="font-bold text-xs mb-1">{evaluator.title}</div>
+                  <div className="text-[10px] text-slate-500 mb-4 h-8 overflow-hidden">
+                    {evaluator.user}
+                    {evaluator.code && <div className='opacity-50 text-[9px]'>{evaluator.code}</div>}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="text-[10px] text-slate-400">Signature</div>
+                  <div className="border-b border-black h-8"></div>
+                  <div className="flex items-end gap-1 text-[10px] pt-1">
+                    <span>Date</span>
+                    <span className="flex-1 border-b border-dotted border-black text-center">
+                      {formatDate(evaluator.date) !== '-' ? formatDate(evaluator.date) : ''}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Comments (Split) */}
+              <div className="flex-1 flex flex-col">
+                {/* Top: Good Points */}
+                <div className="flex-1 border-b border-black p-2 relative">
+                  <div className="text-[10px] font-bold text-slate-700 bg-slate-50 inline-block px-1 rounded mb-1">
+                    {evaluator.goodPoints}
+                  </div>
+                </div>
+
+                {/* Bottom: Improvement Points */}
+                <div className="flex-1 p-2 relative">
+                  <div className="text-[10px] font-bold text-slate-700 bg-slate-50 inline-block px-1 rounded mb-1">
+                    {evaluator.improvePoints}
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={handleSaveDraft}
-                disabled={isSaving || isSubmitting}
-              >
-                {isSaving ? (
-                  <>
-                    <span className="animate-spin mr-2">⏳</span>
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Draft
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={isSaving || isSubmitting || calculateProgress() < 100}
-              >
-                {isSubmitting ? (
-                  <>
-                    <span className="animate-spin mr-2">⏳</span>
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Submit Assessment
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

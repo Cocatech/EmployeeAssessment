@@ -1,0 +1,18 @@
+[
+  {
+    "id": "type-1765515021416",
+    "code": "MID-Year",
+    "name": "Mid-Year",
+    "description": null,
+    "sortOrder": 0,
+    "isActive": true
+  },
+  {
+    "id": "type-1765515031047",
+    "code": "End-Year",
+    "name": "End-Year",
+    "description": null,
+    "sortOrder": 1,
+    "isActive": true
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "id": "g1",
+    "code": "PRD",
+    "name": "Production",
+    "sortOrder": 0,
+    "isActive": true
+  },
+  {
+    "id": "g2",
+    "code": "QA",
+    "name": "Quality Assurance",
+    "sortOrder": 1,
+    "isActive": true
+  },
+  {
+    "id": "g3",
+    "code": "ENG",
+    "name": "Engineering",
+    "sortOrder": 2,
+    "isActive": true
+  },
+  {
+    "id": "g4",
+    "code": "HR",
+    "name": "Human Resources",
+    "sortOrder": 3,
+    "isActive": true
+  },
+  {
+    "id": "g5",
+    "code": "IT",
+    "name": "Information Technology",
+    "sortOrder": 4,
+    "isActive": true
+  }
+]

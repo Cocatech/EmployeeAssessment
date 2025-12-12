@@ -1,0 +1,26 @@
+[
+  {
+    "id": "t1",
+    "code": "PRD-1",
+    "name": "Production Line 1",
+    "groupCode": "PRD",
+    "sortOrder": 0,
+    "isActive": true
+  },
+  {
+    "id": "t2",
+    "code": "QA-IN",
+    "name": "Incoming QA",
+    "groupCode": "QA",
+    "sortOrder": 1,
+    "isActive": true
+  },
+  {
+    "id": "t3",
+    "code": "DEV",
+    "name": "Software Development",
+    "groupCode": "IT",
+    "sortOrder": 2,
+    "isActive": true
+  }
+]

@@ -1,0 +1,37 @@
+[
+  {
+    "id": "p1",
+    "code": "OP",
+    "name": "Operator",
+    "sortOrder": 0,
+    "isActive": true
+  },
+  {
+    "id": "p2",
+    "code": "LD",
+    "name": "Leader",
+    "sortOrder": 1,
+    "isActive": true
+  },
+  {
+    "id": "p3",
+    "code": "SV",
+    "name": "Supervisor",
+    "sortOrder": 2,
+    "isActive": true
+  },
+  {
+    "id": "p4",
+    "code": "MG",
+    "name": "Manager",
+    "sortOrder": 3,
+    "isActive": true
+  },
+  {
+    "id": "p5",
+    "code": "GM",
+    "name": "General Manager",
+    "sortOrder": 4,
+    "isActive": true
+  }
+]

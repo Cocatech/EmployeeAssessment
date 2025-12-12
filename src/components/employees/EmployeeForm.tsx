@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Save, X } from 'lucide-react';
+import { Save, X, RotateCcw, UserCheck, UserX } from 'lucide-react';
 import { createEmployee, updateEmployee } from '@/actions/employees';
+import { resetUserPassword, toggleUserStatus, createUserForEmployee, setUserPassword, updateUserRole } from '@/actions/users';
 import { ImageUpload } from './ImageUpload';
 import { ASSESSMENT_LEVELS } from '@/lib/assessment-levels';
 
@@ -43,9 +44,11 @@ interface EmployeeFormProps {
   employee?: any;
   // Shared data
   allEmployees: Employee[];
-  positions: Position[];
-  groups: Group[];
-  teams: Team[];
+  positions: any[];
+  groups: any[];
+  teams: any[];
+  currentUser?: any;
+  returnUrl?: string; // Optional return URL
 }
 
 export function EmployeeForm({
@@ -54,11 +57,15 @@ export function EmployeeForm({
   allEmployees,
   positions,
   groups,
-  teams
+  teams,
+  currentUser,
+  returnUrl
 }: EmployeeFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUserActionProcessing, setIsUserActionProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Initial values depend on mode
   const initialData = mode === 'edit' ? employee : {};
@@ -72,6 +79,25 @@ export function EmployeeForm({
   const [profileImage, setProfileImage] = useState<string | null>(
     initialData?.profileImage || null
   );
+
+  // User Management State
+  const [newPassword, setNewPassword] = useState('');
+  const [userRole, setUserRole] = useState(initialData?.user?.role || 'EMPLOYEE');
+  const [userType, setUserType] = useState(initialData?.user?.userType || 'EMPLOYEE');
+
+  // Create Mode User State
+  const [createPassword, setCreatePassword] = useState('');
+  const [createRole, setCreateRole] = useState('EMPLOYEE');
+  const [createType, setCreateType] = useState('EMPLOYEE');
+
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+    let pass = '';
+    for (let i = 0; i < 12; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setCreatePassword(pass);
+  };
 
   const handleGroupToggle = (groupCode: string) => {
     setSelectedGroups(prev =>
@@ -93,6 +119,7 @@ export function EmployeeForm({
     e.preventDefault();
     setIsSubmitting(true);
     setError('');
+    setSuccessMessage('');
 
     const formData = new FormData(e.currentTarget);
     const data = {
@@ -123,17 +150,27 @@ export function EmployeeForm({
       if (mode === 'create') {
         // Create requires empCode and joinDate
         if (!data.empCode) throw new Error('Employee Code is required');
-        result = await createEmployee(data as any);
+        const payload = {
+          ...data,
+          empCode: data.empCode!,
+          password: createPassword, // Optional
+          userRole: createRole,
+          userType: createType
+        };
+        result = await createEmployee(payload as any);
       } else {
         // Update
         result = await updateEmployee(employee.empCode, data);
       }
 
       if (result.success) {
-        if (mode === 'create') {
+        if (returnUrl) {
+          router.push(returnUrl);
+        } else if (mode === 'create') {
           router.push('/admin/employees');
         } else {
           router.push(`/admin/employees/${employee.empCode}`);
+          setSuccessMessage('Employee saved successfully');
         }
         router.refresh();
       } else {
@@ -146,20 +183,332 @@ export function EmployeeForm({
     }
   };
 
+  const handleCreateUser = async () => {
+    if (!initialData.empCode) return;
+    if (!confirm('Are you sure you want to create a User account for this employee?')) return;
+
+    setIsUserActionProcessing(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const result = await createUserForEmployee(initialData.empCode);
+      if (result.success) {
+        setSuccessMessage('User account created successfully.');
+        router.refresh();
+      } else {
+        setError(result.error || 'Failed to create user');
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsUserActionProcessing(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!initialData.empCode) return;
+    if (!confirm('Are you sure you want to reset password to "Welcome@2025"?')) return;
+
+    setIsUserActionProcessing(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const result = await resetUserPassword(initialData.empCode);
+      if (result.success) {
+        setSuccessMessage(result.message || 'Password reset successfully');
+      } else {
+        setError(result.error || 'Failed to reset password');
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsUserActionProcessing(false);
+    }
+  };
+
+  const handleToggleUserStatus = async (currentStatus: boolean) => {
+    if (!initialData.empCode) return;
+    const newStatus = !currentStatus;
+    const action = newStatus ? 'activate' : 'deactivate';
+    if (!confirm(`Are you sure you want to ${action} this user account?`)) return;
+
+    setIsUserActionProcessing(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const result = await toggleUserStatus(initialData.empCode, newStatus);
+      if (result.success) {
+        setSuccessMessage(`User account ${action}d successfully.`);
+        router.refresh();
+      } else {
+        setError(result.error || 'Failed to update user status');
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsUserActionProcessing(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    if (!initialData.empCode || !newPassword) return;
+    if (newPassword.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (!confirm('Are you sure you want to change the password for this user?')) return;
+
+    setIsUserActionProcessing(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const result = await setUserPassword(initialData.empCode, newPassword);
+      if (result.success) {
+        setSuccessMessage('Password updated successfully');
+        setNewPassword(''); // Clear input
+      } else {
+        setError(result.error || 'Failed to update password');
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsUserActionProcessing(false);
+    }
+  };
+
+  const handleUpdateRole = async () => {
+    if (!initialData.empCode) return;
+    if (!confirm(`Update Role to ${userRole} and Type to ${userType}?`)) return;
+
+    setIsUserActionProcessing(true);
+    setError('');
+    setSuccessMessage('');
+    try {
+      const result = await updateUserRole(initialData.empCode, userRole, userType);
+      if (result.success) {
+        setSuccessMessage('User role updated successfully');
+        router.refresh(); // Refresh to get latest data
+      } else {
+        setError(result.error || 'Failed to update role');
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setIsUserActionProcessing(false);
+    }
+  };
+
   const activePositions = positions.filter(p => p.isActive);
   const activeGroups = groups.filter(g => g.isActive);
   const activeTeams = teams.filter(t => t.isActive);
 
+  // User Section Data
+  const linkedUser = employee?.user;
+
   return (
     <form onSubmit={handleSubmit}>
-      {/* Error Message */}
+      {/* Messages */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md mb-6">
           {error}
         </div>
       )}
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md mb-6">
+          {successMessage}
+        </div>
+      )}
 
       <div className="space-y-6">
+        {/* User Account Management (Only in Edit Mode) */}
+        {mode === 'edit' && (
+          <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-lg">
+            {/* Header with Status */}
+            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+              User Account Management
+              {linkedUser ? (
+                <span className={`text-xs px-2 py-0.5 rounded-full ${linkedUser.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {linkedUser.isActive ? 'Active' : 'Inactive'}
+                </span>
+              ) : (
+                <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">Not Linked</span>
+              )}
+            </h2>
+
+            {linkedUser ? (
+              <div className="space-y-4">
+                {/* Row 1: Info & Activation */}
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-blue-200 pb-4">
+                  <div className="text-sm text-gray-600">
+                    <span className="font-medium">Username:</span> {linkedUser.email || linkedUser.empCode}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={linkedUser.isActive ? "destructive" : "default"}
+                    onClick={() => handleToggleUserStatus(linkedUser.isActive)}
+                    disabled={isUserActionProcessing}
+                  >
+                    {linkedUser.isActive ? <UserX className="h-4 w-4 mr-2" /> : <UserCheck className="h-4 w-4 mr-2" />}
+                    {linkedUser.isActive ? 'Deactivate User' : 'Activate User'}
+                  </Button>
+                </div>
+
+                {/* Row 2: Password Management */}
+                <div className="flex flex-wrap items-end gap-4 border-b border-blue-200 pb-4">
+                  <div className="space-y-2 flex-1 min-w-[200px]">
+                    <label className="text-xs font-medium uppercase text-blue-800">Change Password</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="text"
+                        placeholder="New password (min 6 chars)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="bg-white h-9"
+                        disabled={isUserActionProcessing}
+                      />
+                      <Button type="button" size="sm" onClick={handleSetPassword} disabled={isUserActionProcessing || !newPassword}>
+                        Set
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex-none">
+                    <span className="text-xs text-muted-foreground mr-2">or</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleResetPassword}
+                      disabled={isUserActionProcessing}
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reset to Default
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Row 3: Role Configuration */}
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-2 w-1/3 min-w-[150px]">
+                    <label className="text-xs font-medium uppercase text-blue-800">User Role</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={userRole}
+                      onChange={(e) => setUserRole(e.target.value)}
+                      disabled={isUserActionProcessing}
+                    >
+                      <option value="EMPLOYEE">Employee</option>
+                      <option value="MANAGER">Manager</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2 w-1/3 min-w-[150px]">
+                    <label className="text-xs font-medium uppercase text-blue-800">User Type</label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                      value={userType}
+                      onChange={(e) => setUserType(e.target.value)}
+                      disabled={isUserActionProcessing}
+                    >
+                      <option value="EMPLOYEE">Standard Employee</option>
+                      <option value="SYSTEM_ADMIN">System Admin</option>
+                    </select>
+                  </div>
+                  <Button type="button" size="sm" onClick={handleUpdateRole} disabled={isUserActionProcessing}>
+                    Update Role
+                  </Button>
+                </div>
+
+              </div>
+            ) : (
+              // Unlinked View
+              <div className="flex items-center justify-between w-full mt-2">
+                <p className="text-sm text-muted-foreground">
+                  This employee does not have a linked user account for system access.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleCreateUser}
+                  disabled={isUserActionProcessing || !initialData.email}
+                >
+                  <UserCheck className="h-4 w-4 mr-2" />
+                  Create User Account
+                </Button>
+              </div>
+            )}
+
+            {!linkedUser && !initialData.email && (
+              <p className="text-xs text-amber-600 mt-2">
+                * Email address is required to create a user account.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* User Account Setup (Create Mode) */}
+        {mode === 'create' && (
+          <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-lg">
+            <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
+              User Account Setup
+            </h2>
+            <p className="text-sm text-gray-500 mb-4">
+              A user account will be automatically created for this employee.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Role Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">User Role</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={createRole}
+                  onChange={(e) => setCreateRole(e.target.value)}
+                >
+                  <option value="EMPLOYEE">Employee</option>
+                  <option value="MANAGER">Manager</option>
+                  {(currentUser?.role === 'ADMIN' || currentUser?.userType === 'SYSTEM_ADMIN') && (
+                    <option value="ADMIN">Admin</option>
+                  )}
+                </select>
+              </div>
+
+              {/* Type Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">User Type</label>
+                <select
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={createType}
+                  onChange={(e) => setCreateType(e.target.value)}
+                >
+                  <option value="EMPLOYEE">Standard Employee</option>
+                  {(currentUser?.userType === 'SYSTEM_ADMIN') && (
+                    <option value="SYSTEM_ADMIN">System Admin</option>
+                  )}
+                </select>
+              </div>
+
+              {/* Password Setting */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Initial Password</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={createPassword}
+                    onChange={(e) => setCreatePassword(e.target.value)}
+                    placeholder="Auto-generated if empty"
+                  />
+                  <Button type="button" variant="outline" onClick={generateRandomPassword}>
+                    Generate
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Default: Welcome@2025
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Basic Information */}
         <div>
           <h2 className="text-lg font-semibold mb-4">Basic Information</h2>

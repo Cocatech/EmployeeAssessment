@@ -13,6 +13,9 @@ import type { Prisma } from '@prisma/client';
 export async function findEmployeeByCode(empCode: string) {
   return prisma.employee.findUnique({
     where: { empCode },
+    include: {
+      user: true, // Include linked user
+    }
   });
 }
 
@@ -86,7 +89,7 @@ export async function findAssessmentsByEmployee(empCode: string) {
 export async function findAssessmentsByPeriod(year: number, quarter: number) {
   const startDate = new Date(year, (quarter - 1) * 3, 1);
   const endDate = new Date(year, quarter * 3, 0);
-  
+
   return prisma.assessment.findMany({
     where: {
       periodStart: { gte: startDate },
@@ -184,7 +187,7 @@ export async function getEmployeeStatistics() {
 
 export async function getAssessmentStatistics(year?: number, quarter?: number) {
   const where: Prisma.AssessmentWhereInput = {};
-  
+
   if (year && quarter) {
     const startDate = new Date(year, (quarter - 1) * 3, 1);
     const endDate = new Date(year, quarter * 3, 0);

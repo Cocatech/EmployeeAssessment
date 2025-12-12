@@ -3,11 +3,12 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit, Send, CheckCircle, XCircle, Users, Trash2, PlayCircle } from 'lucide-react';
 import Link from 'next/link';
 import { getAssessments } from '@/actions/assessments';
-import { getEmployees } from '@/actions/employees';
+import { getEmployees, getEmployee } from '@/actions/employees';
 import { getResponsesByAssessment } from '@/actions/responses';
 import { getQuestionsByLevel } from '@/actions/questions';
 import { notFound } from 'next/navigation';
 import { DraftActions } from '@/components/assessment/DraftActions';
+import { AssessmentExcelView } from '@/components/assessment/AssessmentExcelView';
 import { auth } from '@/lib/auth';
 
 interface Props {
@@ -40,8 +41,8 @@ export default async function AssessmentDetailPage({ params }: Props) {
   const statusUpper = assessment.status.toUpperCase();
 
   // ดึงข้อมูล employee
-  const employees = await getEmployees();
-  const employee = employees.find(e => e.empCode === assessment.employeeId);
+  const empResult = await getEmployee(assessment.employeeId);
+  const employee = empResult.success ? empResult.data : null;
 
   // ดึงคำถามตาม targetLevel ของ assessment (ใช้ targetLevel ที่เก็บใน assessment)
   // ถ้าไม่มี targetLevel ให้ใช้ employee.assessmentLevel เป็น fallback
@@ -213,210 +214,16 @@ export default async function AssessmentDetailPage({ params }: Props) {
         </div>
       </div>
 
-      {/* Assessment Info */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Assessment Details</h2>
-          <div className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Assessment Type:</span>
-              <span className="font-medium">{assessment.assessmentType}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Period:</span>
-              <span className="font-medium">
-                {formatDate(assessment.periodStart)} - {formatDate(assessment.periodEnd)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Due Date:</span>
-              <span className="font-medium">{formatDate(assessment.dueDate)}</span>
-            </div>
-            {assessment.submittedAt && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Submitted:</span>
-                <span className="font-medium">{formatDate(assessment.submittedAt)}</span>
-              </div>
-            )}
-            {assessment.score !== null && assessment.score !== undefined && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Score:</span>
-                <span className="font-medium text-lg">{assessment.score.toFixed(2)} / 5.00</span>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Employee Information</h2>
-          <div className="flex gap-4 items-start">
-            {/* Profile Image */}
-            <div className="flex-shrink-0">
-              {employee?.profileImage ? (
-                <div className="w-20 h-20 rounded-full overflow-hidden border bg-gray-100">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={employee.profileImage}
-                    alt={employee.empName_Eng}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center border text-gray-500 text-xl font-bold">
-                  {employee?.empName_Eng?.charAt(0) || 'E'}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2 flex-1">
-              <div className="grid grid-cols-[100px_1fr] gap-1 text-sm">
-                <span className="text-muted-foreground">Name:</span>
-                <span className="font-medium">{employee?.empName_Eng}</span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr] gap-1 text-sm">
-                <span className="text-muted-foreground">Position:</span>
-                <span className="font-medium">{employee?.position}</span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr] gap-1 text-sm">
-                <span className="text-muted-foreground">Group:</span>
-                <span className="font-medium">{employee?.group}</span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr] gap-1 text-sm">
-                <span className="text-muted-foreground">Level:</span>
-                <span className="font-medium">{employee?.assessmentLevel}</span>
-              </div>
-              <div className="grid grid-cols-[100px_1fr] gap-1 text-sm">
-                <span className="text-muted-foreground">Type:</span>
-                <span className="font-medium">{employee?.employeeType}</span>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Questions and Responses */}
-      <Card className="p-6 overflow-x-auto">
-        <h2 className="text-lg font-semibold mb-4">Assessment Questions & Scores</h2>
-
-        {questions.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            No questions found for this assessment level
-          </div>
-        ) : (
-          <div className="space-y-4 min-w-[800px]">
-            {questions
-              .sort((a, b) => a.order - b.order)
-              .map((question) => {
-                const response = responseMap.get(question.id);
-                // Type casting because responses from action might not strictly match the interface yet if not updated
-                const anyResponse = response as any;
-
-                return (
-                  <div
-                    key={question.id}
-                    className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{question.questionTitle}</span>
-                          <span className="text-xs text-muted-foreground px-2 py-0.5 bg-muted rounded">
-                            {question.category}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            Weight: {question.weight}%
-                          </span>
-                        </div>
-                        {question.description && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {question.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Scores - Only show for non-Draft assessments */}
-                    {statusUpper !== 'DRAFT' && (
-                      <div className="grid grid-cols-2 md:grid-cols-6 gap-2 mt-3 pt-3 border-t">
-                        {/* 1. Self */}
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1 font-semibold text-blue-600">Self</p>
-                          <p className="text-lg font-bold">
-                            {anyResponse?.scoreSelf ?? '-'}
-                          </p>
-                        </div>
-                        {/* 2. Approver 1 */}
-                        {!isOwner && (
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1 font-semibold text-green-600">Appr 1</p>
-                            <p className="text-lg font-bold">
-                              {anyResponse?.scoreAppr1 ?? '-'}
-                            </p>
-                          </div>
-                        )}
-                        {/* 3. Approver 2 */}
-                        {!isOwner && (
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1 font-semibold text-yellow-600">Appr 2</p>
-                            <p className="text-lg font-bold">
-                              {anyResponse?.scoreAppr2 ?? '-'}
-                            </p>
-                          </div>
-                        )}
-                        {/* 4. Approver 3 */}
-                        {!isOwner && (
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-1 font-semibold text-purple-600">Appr 3</p>
-                            <p className="text-lg font-bold">
-                              {anyResponse?.scoreAppr3 ?? '-'}
-                            </p>
-                          </div>
-                        )}
-                        {/* Manager & GM Scores hidden by requirement */}
-                      </div>
-                    )}
-
-                    {/* Comments - Compact View */}
-                    {(anyResponse?.commentSelf || anyResponse?.commentAppr1 || anyResponse?.commentAppr2 || anyResponse?.commentAppr3 || anyResponse?.commentMgr || anyResponse?.commentGm) && (
-                      <div className="mt-3 pt-3 border-t grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                        {anyResponse?.commentSelf && <p><span className="font-semibold text-blue-600">Self:</span> {anyResponse.commentSelf}</p>}
-                        {anyResponse?.commentAppr1 && <p><span className="font-semibold text-green-600">Appr1:</span> {anyResponse.commentAppr1}</p>}
-                        {anyResponse?.commentAppr2 && <p><span className="font-semibold text-yellow-600">Appr2:</span> {anyResponse.commentAppr2}</p>}
-                        {anyResponse?.commentAppr3 && <p><span className="font-semibold text-purple-600">Appr3:</span> {anyResponse.commentAppr3}</p>}
-                        {anyResponse?.commentMgr && <p><span className="font-semibold text-orange-600">Mgr:</span> {anyResponse.commentMgr}</p>}
-                        {anyResponse?.commentGm && <p><span className="font-semibold text-red-600">MD:</span> {anyResponse.commentGm}</p>}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-          </div>
-        )}
-      </Card>
-
-      {/* Summary - Only show for non-Draft assessments with responses */}
-      {assessment.status.toUpperCase() !== 'DRAFT' && responses.length > 0 && (
-        <Card className="p-6">
-          <h2 className="text-lg font-semibold mb-4">Summary Status</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Total Questions</p>
-              <p className="text-2xl font-bold">{questions.length}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Answered</p>
-              <p className="text-2xl font-bold">{responses.length}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Progress</p>
-              <p className="text-2xl font-bold">
-                {questions.length > 0
-                  ? Math.round((responses.length / questions.length) * 100)
-                  : 0}%
-              </p>
-            </div>
-          </div>
-        </Card>
+      {employee && (
+        <AssessmentExcelView
+          assessment={assessment}
+          employee={employee}
+          questions={questions}
+          responses={responseMap}
+          currentUserId={currentUserId}
+          isOwner={isOwner}
+          userRole={role}
+        />
       )}
     </div>
   );

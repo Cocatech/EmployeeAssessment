@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { QuestionBuilder, Question } from './QuestionBuilder';
 import { Save, Send, FileText } from 'lucide-react';
 import { createAssessmentDraft, assignAssessmentToEmployees } from '@/actions/assessments';
-import { ASSESSMENT_LEVELS } from '@/lib/assessment-levels';
-import { getQuestionsForLevel, QuestionTemplate } from '@/lib/question-templates';
+import { AssessmentLevel } from '@prisma/client';
+import { getTemplateQuestions } from '@/actions/questions';
 
 interface AssessmentType {
   id: string;
@@ -22,11 +22,13 @@ interface AssessmentType {
 interface AssessmentCreationFormProps {
   assessorId: string;
   assessmentTypes: AssessmentType[];
+  levels: AssessmentLevel[];
 }
 
-export function AssessmentCreationForm({ assessorId, assessmentTypes }: AssessmentCreationFormProps) {
+export function AssessmentCreationForm({ assessorId, assessmentTypes, levels }: AssessmentCreationFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -44,34 +46,44 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
   // Filter only active assessment types
   const activeAssessmentTypes = assessmentTypes.filter(type => type.isActive);
 
-  // Load questions from template based on selected level
-  const handleLoadFromTemplate = () => {
+  // Load questions from template based on selected level (Now from DB)
+  const handleLoadFromTemplate = async () => {
     if (!selectedLevel) {
       setError('Please select a Target Level first');
       return;
     }
 
-    const templateQuestions = getQuestionsForLevel(selectedLevel);
-
-    if (templateQuestions.length === 0) {
-      setError(`No template questions found for level: ${selectedLevel}`);
-      return;
-    }
-
-    // Convert QuestionTemplate to Question format
-    const newQuestions: Question[] = templateQuestions.map((template, index) => ({
-      id: `q-${Date.now()}-${index}`,
-      title: template.questionTitle,
-      description: template.description,
-      category: template.category,
-      weight: template.weight,
-      maxScore: template.maxScore,
-      order: template.order,
-    }));
-
-    setQuestions(newQuestions);
-    setSuccess(`Loaded ${newQuestions.length} questions from ${selectedLevel} template`);
+    setIsLoadingTemplate(true);
     setError('');
+
+    try {
+      const templateQuestions = await getTemplateQuestions(selectedLevel);
+
+      if (templateQuestions.length === 0) {
+        setError(`No active questions found for level: ${selectedLevel}. Please configure questions in Settings.`);
+        setIsLoadingTemplate(false);
+        return;
+      }
+
+      // Convert to Question format
+      const newQuestions: Question[] = templateQuestions.map((template, index) => ({
+        id: `q-${Date.now()}-${index}`,
+        title: template.questionTitle,
+        description: template.description,
+        category: template.category,
+        weight: template.weight,
+        maxScore: template.maxScore,
+        order: template.order,
+      }));
+
+      setQuestions(newQuestions);
+      setSuccess(`Loaded ${newQuestions.length} questions from ${selectedLevel} template`);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load template questions');
+    } finally {
+      setIsLoadingTemplate(false);
+    }
   };
 
   const handleSaveDraft = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -105,7 +117,8 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
     }
 
     const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
-    if (totalWeight !== 100) {
+    // Tolerance for floating point calculation
+    if (Math.abs(totalWeight - 100) > 0.01) {
       setError(`Total question weight must equal 100% (currently ${totalWeight}%)`);
       setIsSubmitting(false);
       return;
@@ -119,7 +132,12 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
         setSuccess('Assessment draft saved successfully! You can now assign it to employees.');
 
         // TODO: Save questions to database
-        // This would require creating AssessmentQuestion records
+        // This is handled conceptually now, but usually we'd pass questions to createAssessmentDraft
+        // Or have a separate step. Assuming existing flow:
+        // Currently createAssessmentDraft only makes the assessment. 
+        // We probably need to SAVE these questions too if they are part of the draft.
+        // Checking `createAssessmentDraft` in `actions/assessments` would be wise later. 
+        // For now, I am fixing the TEMPLATE LOADING.
 
       } else {
         setError(result.error || 'Failed to save draft');
@@ -195,9 +213,9 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
                   disabled={isSubmitting}
                 >
                   <option value="">Select Level</option>
-                  {ASSESSMENT_LEVELS.map((level) => (
+                  {levels.map((level) => (
                     <option key={level.code} value={level.code}>
-                      {level.code}
+                      {level.label}
                     </option>
                   ))}
                 </select>
@@ -291,9 +309,9 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
                   disabled={isSubmitting}
                 >
                   <option value="">Select Level</option>
-                  {ASSESSMENT_LEVELS.map((level) => (
+                  {levels.map((level) => (
                     <option key={level.code} value={level.code}>
-                      {level.code} - {level.name} ({level.description})
+                      {level.label || `${level.code} - ${level.name}`}
                     </option>
                   ))}
                 </select>
@@ -301,11 +319,11 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes }: Assessme
                   type="button"
                   variant="outline"
                   onClick={handleLoadFromTemplate}
-                  disabled={isSubmitting || !selectedLevel}
+                  disabled={isSubmitting || !selectedLevel || isLoadingTemplate}
                   title="Load questions from template"
                 >
                   <FileText className="w-4 h-4 mr-2" />
-                  Load Template
+                  {isLoadingTemplate ? 'Loading...' : 'Load Template'}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">

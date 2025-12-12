@@ -29,10 +29,7 @@ export async function getAssessments(params?: {
 
     const assessments = await prisma.assessment.findMany({
       where,
-      include: {
-        employee: true,
-        assessor: true,
-      },
+      where,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -195,6 +192,12 @@ export async function updateAssessment(id: string, data: Partial<Assessment>) {
  */
 export async function deleteAssessment(id: string) {
   try {
+    // Delete related notifications first (since they are loose coupled)
+    await prisma.notification.deleteMany({
+      where: { assessmentId: id }
+    });
+
+    // Delete assessment (responses cascade automatically)
     await prisma.assessment.delete({
       where: { id },
     });
@@ -242,6 +245,7 @@ export async function getPendingAssessments() {
       employeeName: assessment.employee.empName_Eng,
       dueDate: assessment.dueDate?.toISOString(),
       status: assessment.status,
+      assessmentType: assessment.assessmentType,
     }));
   } catch (error) {
     console.error('Error fetching pending assessments:', error);
@@ -409,10 +413,11 @@ export async function assignAssessmentToEmployees(assessmentId: string) {
       return { success: false, error: 'No employees found for this assessment level' };
     }
 
-    // Create assessment instances for each employee
-    const assessments = await Promise.all(
-      employees.map(async (employee) => {
-        return prisma.assessment.create({
+    // Use transaction to ensure atomicity and consistency
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create assessments
+      const assessmentPromises = employees.map(employee =>
+        tx.assessment.create({
           data: {
             title: draft.title,
             description: draft.description,
@@ -427,40 +432,46 @@ export async function assignAssessmentToEmployees(assessmentId: string) {
             dueDate: draft.dueDate,
             assignedAt: new Date(),
           },
-        });
-      })
-    );
+        })
+      );
 
-    // Create notifications for each employee
-    await Promise.all(
-      employees.map(async (employee) => {
-        return prisma.notification.create({
+      const newAssessments = await Promise.all(assessmentPromises);
+
+      // 2. Create notifications
+      const notificationPromises = employees.map(employee =>
+        tx.notification.create({
           data: {
             userId: employee.empCode,
             type: 'AssessmentAssigned',
             title: 'New Assessment Assigned',
             message: `You have been assigned a new assessment: ${draft.title}`,
-            assessmentId: assessmentId,
-            link: `/dashboard/assessments/${assessmentId}`,
+            assessmentId: assessmentId, // Link to original draft for reference, or should it be the new one? 
+            // Ideally link to the *new* assessment ID, but that's hard in bulk map without index matching. 
+            // For now, linking to list page is safer.
+            link: `/dashboard/assessments`,
           },
-        });
-      })
-    );
+        })
+      );
 
-    // Update the draft to mark it as assigned
-    await prisma.assessment.update({
-      where: { id: assessmentId },
-      data: {
-        status: 'Assigned',
-        assignedAt: new Date(),
-      },
+      await Promise.all(notificationPromises);
+
+      // 3. Mark draft as assigned
+      await tx.assessment.update({
+        where: { id: assessmentId },
+        data: {
+          status: 'Assigned',
+          assignedAt: new Date(),
+        },
+      });
+
+      return newAssessments;
     });
 
     revalidatePath('/dashboard/assessments');
     return {
       success: true,
-      count: assessments.length,
-      message: `Assessment assigned to ${assessments.length} employees`
+      count: result.length,
+      message: `Assessment assigned to ${result.length} employees`
     };
   } catch (error) {
     console.error('Error assigning assessment:', error);

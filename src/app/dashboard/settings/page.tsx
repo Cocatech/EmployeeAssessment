@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Settings, Briefcase, Building, Users, ArrowLeft } from 'lucide-react';
+import { Settings, Briefcase, Building, Users, ArrowLeft, ClipboardCheck } from 'lucide-react';
 
 export const metadata = {
   title: 'Settings | TRTH Assessment',
@@ -13,7 +13,7 @@ export const metadata = {
 
 export default async function SettingsPage() {
   const session = await auth();
-  
+
   if (!session?.user) {
     redirect('/auth/signin');
   }
@@ -51,6 +51,13 @@ export default async function SettingsPage() {
       icon: Settings,
       href: '/dashboard/settings/assessment-types',
       color: 'bg-orange-500',
+    },
+    {
+      title: 'Assessment Questions',
+      description: 'Manage assessment templates and criteria',
+      icon: ClipboardCheck,
+      href: '/dashboard/settings/assessment-questions',
+      color: 'bg-red-500',
     },
   ];
 
@@ -110,7 +117,7 @@ export default async function SettingsPage() {
           <div>
             <h3 className="font-semibold text-blue-900 mb-1">About Settings</h3>
             <p className="text-sm text-blue-800">
-              Master data configuration for the assessment system. Changes here will affect employee records, 
+              Master data configuration for the assessment system. Changes here will affect employee records,
               forms, and reports throughout the system. Only System Administrators can access these settings.
             </p>
           </div>

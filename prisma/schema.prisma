@@ -72,6 +72,7 @@ model AssessmentQuestion {
   @@index([category])
   @@index([isActive])
   @@index([order])
+  @@index([isActive, applicableLevel, category, order]) // Composite index for template loading
   @@map("assessment_questions")
 }
 
@@ -314,6 +315,23 @@ model AssessmentType {
   @@index([code])
   @@index([sortOrder])
   @@map("assessment_types")
+}
+
+model AssessmentLevel {
+  id          String   @id @default(cuid())
+  code        String   @unique // e.g., L1-Supplier
+  name        String   // e.g., Supplier
+  description String?  // e.g., ผู้จัดหา/ซัพพลายเออร์
+  label       String   // e.g., L1-Supplier - Supplier (ผู้จัดหา/ซัพพลายเออร์)
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+  @@index([sortOrder])
+  @@index([isActive])
+  @@map("assessment_levels")
 }
 
 // ============================================

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getAssessments } from '@/actions/assessments';
 import { getEmployees } from '@/actions/employees';
 import { auth } from '@/lib/auth';
+import { DeleteAssessmentButton } from '@/components/assessment/DeleteAssessmentButton';
 
 export const metadata = {
   title: 'Assessments | TRTH Assessment',
@@ -226,7 +227,7 @@ export default async function DashboardAssessmentsPage() {
                     </span>
                   </div>
                   <div>{getStatusBadge(assessment.status)}</div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <div>
                       {assessment.score && (
                         <p className="text-sm">
@@ -237,11 +238,16 @@ export default async function DashboardAssessmentsPage() {
                         Due: {new Date(assessment.dueDate).toLocaleDateString()}
                       </p>
                     </div>
-                    <Link href={`/dashboard/assessments/${assessment.id}`}>
-                      <Button variant="outline" size="sm">
-                        View
-                      </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      {isAdmin && (
+                        <DeleteAssessmentButton id={assessment.id} title={assessment.title} />
+                      )}
+                      <Link href={`/dashboard/assessments/${assessment.id}`}>
+                        <Button variant="outline" size="sm">
+                          View
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -251,4 +257,5 @@ export default async function DashboardAssessmentsPage() {
       </Card>
     </div>
   );
+  // End of DashboardAssessmentsPage component
 }
