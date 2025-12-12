@@ -12,7 +12,6 @@ interface Question {
   questionTitle: string;
   description?: string;
   category: string;
-  weight: number;
   maxScore: number;
   order: number;
 }
@@ -216,7 +215,8 @@ export default function ScoringForm({
     }
   };
 
-  const totalWeight = questions.reduce((sum, q) => sum + (q.weight || 0), 0);
+  // Weight calculation removed
+  // const totalWeight = questions.reduce((sum, q) => sum + (q.weight || 0), 0);
 
   // Editable check
   // Employee can edit when status is Draft (admin) or Assigned/InProgress (user)

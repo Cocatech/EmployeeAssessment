@@ -174,7 +174,7 @@ export async function createQuestion(data: Omit<AssessmentQuestion, 'id' | 'crea
         description: data.description || null,
         category: data.category,
         applicableLevel: data.applicableLevel,
-        weight: data.weight,
+        weight: 0,
         maxScore: data.maxScore || 5,
         order: data.order,
         isActive: data.isActive !== false,
@@ -201,7 +201,7 @@ export async function updateQuestion(id: string, data: Partial<AssessmentQuestio
     if (data.description !== undefined) updateData.description = data.description || null;
     if (data.category !== undefined) updateData.category = data.category;
     if (data.applicableLevel !== undefined) updateData.applicableLevel = data.applicableLevel;
-    if (data.weight !== undefined) updateData.weight = data.weight;
+    // weight is removed from UI
     if (data.maxScore !== undefined) updateData.maxScore = data.maxScore;
     if (data.order !== undefined) updateData.order = data.order;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;

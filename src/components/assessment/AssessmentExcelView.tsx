@@ -1,5 +1,6 @@
 'use client';
 
+import { Fragment } from 'react';
 import { Card } from '@/components/ui/card';
 
 // Define flexible interfaces that match the data passed from Server Components
@@ -244,7 +245,7 @@ export function AssessmentExcelView({
                                 const isHeader = idx === 0 || questions[idx - 1]?.category !== q.category;
 
                                 return (
-                                    <>
+                                    <Fragment key={q.id}>
                                         {isHeader && (
                                             <tr key={`h-${q.category}`}>
                                                 <td colSpan={7} className="border border-black bg-slate-100 font-bold p-1 px-2 uppercase tracking-wide text-[11px]">
@@ -269,7 +270,7 @@ export function AssessmentExcelView({
                                                 {fmtScore(res?.scoreAppr3) === '-' ? '' : fmtScore(res?.scoreAppr3)}
                                             </td>
                                         </tr>
-                                    </>
+                                    </Fragment>
                                 );
                             })
                         )}

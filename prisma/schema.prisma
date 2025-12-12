@@ -352,3 +352,17 @@ model Notification {
   @@index([createdAt])
   @@map("notifications")
 }
+// ============================================
+// Assessment Category Model
+// ============================================
+model AssessmentCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("assessment_categories")
+}

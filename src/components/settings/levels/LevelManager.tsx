@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { AssessmentLevel } from '@prisma/client';
 import {
     Table,
@@ -21,16 +21,28 @@ import {
     toggleAssessmentLevelStatus,
 } from '@/actions/levels';
 import { Edit2, Trash2, Plus, Power } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
+type SerializedAssessmentLevel = Omit<AssessmentLevel, 'createdAt' | 'updatedAt'> & {
+    createdAt: string;
+    updatedAt: string;
+}
 
 interface LevelManagerProps {
-    initialLevels: AssessmentLevel[];
+    initialLevels: SerializedAssessmentLevel[];
 }
 
 export function LevelManager({ initialLevels }: LevelManagerProps) {
+    const router = useRouter();
     const [levels, setLevels] = useState(initialLevels);
     const [isPending, startTransition] = useTransition();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [editingLevel, setEditingLevel] = useState<AssessmentLevel | null>(null);
+    const [editingLevel, setEditingLevel] = useState<SerializedAssessmentLevel | null>(null);
+
+    // Sync state with props
+    useEffect(() => {
+        setLevels(initialLevels);
+    }, [initialLevels]);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -41,7 +53,7 @@ export function LevelManager({ initialLevels }: LevelManagerProps) {
         sortOrder: 0,
     });
 
-    const handleOpenDialog = (level?: AssessmentLevel) => {
+    const handleOpenDialog = (level?: SerializedAssessmentLevel) => {
         if (level) {
             setEditingLevel(level);
             setFormData({
@@ -83,9 +95,7 @@ export function LevelManager({ initialLevels }: LevelManagerProps) {
 
             if (result.success) {
                 setIsDialogOpen(false);
-                // Optimistic update or just rely on router refresh if parent handles it
-                // For now, let's force a reload or callback if we had one
-                window.location.reload();
+                router.refresh();
             } else {
                 alert(result.error);
             }
@@ -98,7 +108,7 @@ export function LevelManager({ initialLevels }: LevelManagerProps) {
         startTransition(async () => {
             const result = await deleteAssessmentLevel(id);
             if (result.success) {
-                window.location.reload();
+                router.refresh();
             } else {
                 alert(result.error);
             }
@@ -108,7 +118,7 @@ export function LevelManager({ initialLevels }: LevelManagerProps) {
     const handleToggleStatus = async (id: string, currentStatus: boolean) => {
         startTransition(async () => {
             await toggleAssessmentLevelStatus(id, !currentStatus);
-            window.location.reload();
+            router.refresh();
         })
     }
 

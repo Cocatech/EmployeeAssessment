@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from "react"
 import { AssessmentQuestion } from "@/types/assessment"
-import { AssessmentLevel } from "@prisma/client"
+import { AssessmentLevel, AssessmentCategory } from "@prisma/client"
 import { QuestionListTable } from "./QuestionListTable"
 import { QuestionFormDialog } from "./QuestionFormDialog"
 import { Button } from "@/components/ui/button"
-import { Plus, ArrowLeft, Layers, FileText, Trash2 } from "lucide-react"
+import { Plus, ArrowLeft, Layers, Trash2 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -23,25 +23,24 @@ interface QuestionStats {
     byLevel: Record<string, number>
 }
 
-interface QuestionManagementProps {
-    initialQuestions: AssessmentQuestion[]
-    stats?: QuestionStats
-    levels: AssessmentLevel[]
+type SerializedAssessmentLevel = Omit<AssessmentLevel, 'createdAt' | 'updatedAt'> & {
+    createdAt: string;
+    updatedAt: string;
 }
 
-const CATEGORIES = [
-    "All",
-    "Technical Knowledge",
-    "Responsibility",
-    "Collaboration",
-    "Communication",
-    "Problem Solving",
-    "Leadership",
-    "Discipline",
-    "Quality"
-]
+type SerializedAssessmentCategory = Omit<AssessmentCategory, 'createdAt' | 'updatedAt'> & {
+    createdAt: string;
+    updatedAt: string;
+}
 
-export default function QuestionManagement({ initialQuestions, stats, levels = [] }: QuestionManagementProps) {
+interface QuestionManagementProps {
+    initialQuestions?: AssessmentQuestion[]
+    initialStats?: QuestionStats
+    levels: SerializedAssessmentLevel[]
+    categories?: SerializedAssessmentCategory[]
+}
+
+export function QuestionManagement({ initialQuestions = [], initialStats, levels = [], categories = [] }: QuestionManagementProps) {
     const router = useRouter()
     const [view, setView] = useState<"overview" | "detail">("overview")
     const [selectedLevel, setSelectedLevel] = useState<string>("All")
@@ -56,13 +55,13 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
 
     // Derived stats if not provided (fallback)
     const activeStats = useMemo(() => {
-        if (stats) return stats.byLevel;
+        if (initialStats) return initialStats.byLevel;
         const counts: Record<string, number> = {};
         initialQuestions.forEach(q => {
             counts[q.applicableLevel] = (counts[q.applicableLevel] || 0) + 1;
         });
         return counts;
-    }, [initialQuestions, stats]);
+    }, [initialQuestions, initialStats]);
 
     const filteredQuestions = useMemo(() => {
         return initialQuestions.filter(q => {
@@ -86,11 +85,16 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
     const handleCreate = () => {
         setEditingQuestion(null)
         setIsDialogOpen(true)
+        // Auto-select level is handled by passing defaultLevel to Dialog
     }
 
     const handleEdit = (q: AssessmentQuestion) => {
         setEditingQuestion(q)
         setIsDialogOpen(true)
+    }
+
+    const handleQuestionSaved = () => {
+        router.refresh()
     }
 
     const handleClearAllClick = () => {
@@ -109,12 +113,13 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
         setIsClearDialogOpen(false);
 
         if (result.success) {
-            // Success handling - router refresh is handled in action
+            router.refresh();
         } else {
             alert(result.error);
         }
     }
 
+    // OVERVIEW VIEW
     if (view === "overview") {
         return (
             <div className="space-y-6">
@@ -159,8 +164,9 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
                     open={isDialogOpen}
                     onOpenChange={setIsDialogOpen}
                     question={editingQuestion}
-                    onSuccess={() => {/* router.refresh handled in dialog */ }}
+                    onSuccess={handleQuestionSaved}
                     levels={levels}
+                    categories={categories}
                 />
             </div>
         )
@@ -176,7 +182,7 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
                     </Button>
                     <div className="h-6 w-px bg-slate-300 mx-2" />
                     <h3 className="text-lg font-bold">
-                        {selectedLevel === "All" ? "All Questions" : levels.find(l => l.code === selectedLevel)?.label || selectedLevel}
+                        {selectedLevel === "All" ? "Question Library" : levels.find(l => l.code === selectedLevel)?.label || selectedLevel}
                     </h3>
                     <span className="bg-slate-200 text-slate-600 text-xs px-2 py-1 rounded-full">{filteredQuestions.length} items</span>
                 </div>
@@ -187,15 +193,16 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
                             <SelectValue placeholder="Filter by Category" />
                         </SelectTrigger>
                         <SelectContent>
-                            {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c === "All" ? "All Categories" : c}</SelectItem>)}
+                            <SelectItem value="All">All Categories</SelectItem>
+                            {categories.map(c => (
+                                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
 
-                    {filteredQuestions.length > 0 && (
-                        <Button variant="destructive" onClick={handleClearAllClick}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Clear All
-                        </Button>
-                    )}
+                    <Button variant="destructive" onClick={handleClearAllClick} disabled={filteredQuestions.length === 0}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Clear All
+                    </Button>
 
                     <Button onClick={handleCreate}>
                         <Plus className="mr-2 h-4 w-4" /> Add Question
@@ -205,6 +212,10 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
 
             <QuestionListTable
                 questions={filteredQuestions}
+                levelFilter={selectedLevel}
+                categoryFilter={selectedCategory}
+                levels={levels}
+                categories={categories}
                 onEdit={handleEdit}
             />
 
@@ -212,8 +223,9 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
                 open={isDialogOpen}
                 onOpenChange={setIsDialogOpen}
                 question={editingQuestion}
-                onSuccess={() => {/* router.refresh handled in dialog */ }}
+                onSuccess={handleQuestionSaved}
                 levels={levels}
+                categories={categories}
                 defaultLevel={selectedLevel === "All" ? undefined : selectedLevel}
             />
 
@@ -223,7 +235,7 @@ export default function QuestionManagement({ initialQuestions, stats, levels = [
                     <DialogHeader>
                         <DialogTitle>Clear All Questions?</DialogTitle>
                         <DialogDescription>
-                            This will permanently delete <strong>{filteredQuestions.length}</strong> questions in the current view.
+                            This will permanently delete {filteredQuestions.length} questions in the current view.
                             This action cannot be undone. Questions used in active assessments may not be deleted.
                         </DialogDescription>
                     </DialogHeader>

@@ -41,11 +41,12 @@ export function ScoreTable({ items, role, status, register, readonly = false }: 
   const canEditGm = role === 'GM' && status === 'SUBMITTED_GM' && !readonly;
 
   // Calculate totals
-  const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
-  const totalSelf = items.reduce((sum, item) => sum + (item.scoreSelf || 0) * item.weight, 0);
-  const totalMgr = items.reduce((sum, item) => sum + (item.scoreMgr || 0) * item.weight, 0);
-  const totalAppr2 = items.reduce((sum, item) => sum + (item.scoreAppr2 || 0) * item.weight, 0);
-  const totalGm = items.reduce((sum, item) => sum + (item.scoreGm || 0) * item.weight, 0);
+  // Use Simple Average since Weight is removed
+  const totalCount = items.length;
+  const averageSelf = totalCount > 0 ? items.reduce((sum, item) => sum + (item.scoreSelf || 0), 0) / totalCount : 0;
+  const averageMgr = totalCount > 0 ? items.reduce((sum, item) => sum + (item.scoreMgr || 0), 0) / totalCount : 0;
+  const averageAppr2 = totalCount > 0 ? items.reduce((sum, item) => sum + (item.scoreAppr2 || 0), 0) / totalCount : 0;
+  const averageGm = totalCount > 0 ? items.reduce((sum, item) => sum + (item.scoreGm || 0), 0) / totalCount : 0;
 
   return (
     <div className="overflow-x-auto">
@@ -53,7 +54,7 @@ export function ScoreTable({ items, role, status, register, readonly = false }: 
         <thead>
           <tr className="bg-gray-100">
             <th className="border border-gray-300 px-4 py-2 text-left">KPI / Topic</th>
-            <th className="border border-gray-300 px-4 py-2 text-center w-20">Weight</th>
+            {/* Weight column removed */}
             <th className={cn(
               "border border-gray-300 px-4 py-2 text-center w-24",
               "bg-blue-100"
@@ -92,10 +93,8 @@ export function ScoreTable({ items, role, status, register, readonly = false }: 
               <td className="border border-gray-300 px-4 py-2">
                 {item.topic}
               </td>
-              <td className="border border-gray-300 px-4 py-2 text-center">
-                {item.weight}
-              </td>
-              
+              {/* Weight cell removed */}
+
               {/* Self Score Column */}
               <td className={cn(
                 "border border-gray-300 px-2 py-2",
@@ -183,31 +182,29 @@ export function ScoreTable({ items, role, status, register, readonly = false }: 
               )}
             </tr>
           ))}
-          
+
           {/* Total Row */}
           <tr className="bg-gray-200 font-semibold">
-            <td className="border border-gray-300 px-4 py-2">
-              Total (Weighted Average)
+            <td className="border border-gray-300 px-4 py-2 text-right">
+              Total (Average)
             </td>
-            <td className="border border-gray-300 px-4 py-2 text-center">
-              {totalWeight}
-            </td>
+            {/* Weight totals removed */}
             <td className="border border-gray-300 px-4 py-2 text-center bg-blue-100">
-              {(totalSelf / totalWeight).toFixed(2)}
+              {averageSelf.toFixed(2)}
             </td>
             {showManagerScore && (
               <td className="border border-gray-300 px-4 py-2 text-center bg-yellow-100">
-                {(totalMgr / totalWeight).toFixed(2)}
+                {averageMgr.toFixed(2)}
               </td>
             )}
             {showApprover2Score && (
               <td className="border border-gray-300 px-4 py-2 text-center bg-orange-100">
-                {(totalAppr2 / totalWeight).toFixed(2)}
+                {averageAppr2.toFixed(2)}
               </td>
             )}
             {showGmScore && (
               <td className="border border-gray-300 px-4 py-2 text-center bg-green-100">
-                {(totalGm / totalWeight).toFixed(2)}
+                {averageGm.toFixed(2)}
               </td>
             )}
           </tr>

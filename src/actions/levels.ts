@@ -24,28 +24,6 @@ export async function getAssessmentLevels() {
             orderBy: { sortOrder: 'asc' },
         });
 
-        // Lazy Seed: If no levels exist, seed from constant
-        if (levels.length === 0) {
-            console.log('Seeding Assessment Levels from constant...');
-            const seedData = ASSESSMENT_LEVELS.map((l) => ({
-                code: l.code,
-                name: l.name,
-                description: l.description,
-                label: l.label || `${l.code} - ${l.name}`,
-                sortOrder: l.order,
-                isActive: true,
-            }));
-
-            await prisma.assessmentLevel.createMany({
-                data: seedData,
-                skipDuplicates: true,
-            });
-
-            return await prisma.assessmentLevel.findMany({
-                orderBy: { sortOrder: 'asc' },
-            });
-        }
-
         return levels;
     } catch (error) {
         console.error('Failed to fetch assessment levels:', error);

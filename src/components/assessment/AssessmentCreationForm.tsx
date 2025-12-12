@@ -116,6 +116,8 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes, levels }: 
       return;
     }
 
+    // Weight validation removed as per user request
+    /* 
     const totalWeight = questions.reduce((sum, q) => sum + q.weight, 0);
     // Tolerance for floating point calculation
     if (Math.abs(totalWeight - 100) > 0.01) {
@@ -123,6 +125,7 @@ export function AssessmentCreationForm({ assessorId, assessmentTypes, levels }: 
       setIsSubmitting(false);
       return;
     }
+    */
 
     try {
       const result = await createAssessmentDraft(data);

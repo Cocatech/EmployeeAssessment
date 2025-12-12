@@ -5,9 +5,24 @@ import { Button } from "@/components/ui/button"
 import { Edit2, Trash2, Power, PowerOff } from "lucide-react"
 import { deleteQuestion, toggleQuestionStatus } from "@/actions/questions"
 import { useRouter } from "next/navigation"
+import { AssessmentCategory, AssessmentLevel } from "@prisma/client" // Added AssessmentCategory and AssessmentLevel
+
+type SerializedAssessmentLevel = Omit<AssessmentLevel, 'createdAt' | 'updatedAt'> & {
+    createdAt: string;
+    updatedAt: string;
+}
+
+type SerializedAssessmentCategory = Omit<AssessmentCategory, 'createdAt' | 'updatedAt'> & {
+    createdAt: string;
+    updatedAt: string;
+}
 
 interface QuestionListTableProps {
     questions: AssessmentQuestion[]
+    levelFilter: string // Added
+    categoryFilter?: string // Added
+    levels: SerializedAssessmentLevel[] // Added
+    categories?: SerializedAssessmentCategory[] // Added
     onEdit: (question: AssessmentQuestion) => void
 }
 

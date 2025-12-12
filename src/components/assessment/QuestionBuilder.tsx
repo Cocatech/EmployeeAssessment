@@ -72,13 +72,13 @@ export function QuestionBuilder({ questions, onChange, disabled }: QuestionBuild
     const updated = questions.map(q =>
       q.id === editingId
         ? {
-            ...q,
-            title: formData.title!,
-            description: formData.description,
-            category: formData.category || q.category,
-            weight: formData.weight || q.weight,
-            maxScore: formData.maxScore || q.maxScore,
-          }
+          ...q,
+          title: formData.title!,
+          description: formData.description,
+          category: formData.category || q.category,
+          weight: formData.weight || q.weight,
+          maxScore: formData.maxScore || q.maxScore,
+        }
         : q
     );
 
@@ -131,13 +131,12 @@ export function QuestionBuilder({ questions, onChange, disabled }: QuestionBuild
 
   return (
     <div className="space-y-4">
+// Weight logic removed
+      // ... existing code ...
       {/* Question List */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Questions ({questions.length})</h3>
-          <div className="text-sm text-muted-foreground">
-            Total Weight: {totalWeight}%
-          </div>
         </div>
 
         {questions.length === 0 ? (
@@ -194,7 +193,6 @@ export function QuestionBuilder({ questions, onChange, disabled }: QuestionBuild
 
                     <div className="flex gap-4 text-sm text-muted-foreground">
                       <span>Category: {question.category}</span>
-                      <span>Weight: {question.weight}%</span>
                       <span>Max Score: {question.maxScore}</span>
                     </div>
                   </div>
@@ -234,7 +232,7 @@ export function QuestionBuilder({ questions, onChange, disabled }: QuestionBuild
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Category</label>
               <select
@@ -252,18 +250,6 @@ export function QuestionBuilder({ questions, onChange, disabled }: QuestionBuild
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Weight (%)</label>
-              <Input
-                type="number"
-                min="1"
-                max="100"
-                value={formData.weight || 10}
-                onChange={(e) => setFormData({ ...formData, weight: parseInt(e.target.value) || 10 })}
-                disabled={disabled}
-              />
-            </div>
-
-            <div className="space-y-2">
               <label className="text-sm font-medium">Max Score</label>
               <Input
                 type="number"
@@ -275,54 +261,8 @@ export function QuestionBuilder({ questions, onChange, disabled }: QuestionBuild
               />
             </div>
           </div>
-
-          <div className="flex gap-2">
-            {editingId ? (
-              <>
-                <Button
-                  type="button"
-                  onClick={handleUpdate}
-                  disabled={!formData.title || disabled}
-                >
-                  Update Question
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setEditingId(null);
-                    setFormData({
-                      title: '',
-                      description: '',
-                      category: 'Technical',
-                      weight: 10,
-                      maxScore: 5,
-                    });
-                  }}
-                  disabled={disabled}
-                >
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                onClick={handleAdd}
-                disabled={!formData.title || disabled}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Question
-              </Button>
-            )}
-          </div>
         </div>
       </Card>
-
-      {totalWeight !== 100 && questions.length > 0 && (
-        <div className="text-sm text-yellow-600 bg-yellow-50 p-3 rounded-md">
-          ⚠️ Warning: Total weight is {totalWeight}%. It should equal 100% for accurate scoring.
-        </div>
-      )}
     </div>
   );
 }

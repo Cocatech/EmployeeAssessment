@@ -11,12 +11,23 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useRouter } from "next/navigation"
 
+type SerializedAssessmentLevel = Omit<AssessmentLevel, 'createdAt' | 'updatedAt'> & {
+    createdAt: string;
+    updatedAt: string;
+}
+
+type SerializedAssessmentCategory = Omit<AssessmentCategory, 'createdAt' | 'updatedAt'> & {
+    createdAt: string;
+    updatedAt: string;
+}
+
 interface QuestionFormDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     question?: AssessmentQuestion | null
     onSuccess: () => void
-    levels: AssessmentLevel[]
+    levels: SerializedAssessmentLevel[]
+    categories: SerializedAssessmentCategory[]
     defaultLevel?: string
 }
 
@@ -29,18 +40,7 @@ type FormData = {
     weight: number // Hidden but required by schema
 }
 
-const CATEGORIES = [
-    "Technical Knowledge",
-    "Responsibility",
-    "Collaboration",
-    "Communication",
-    "Problem Solving",
-    "Leadership",
-    "Discipline",
-    "Quality"
-]
-
-export function QuestionFormDialog({ open, onOpenChange, question, onSuccess, levels = [], defaultLevel }: QuestionFormDialogProps) {
+export function QuestionFormDialog({ open, onOpenChange, question, onSuccess, levels = [], categories = [], defaultLevel }: QuestionFormDialogProps) {
     const [isLoading, setIsLoading] = useState(false)
     const router = useRouter()
 
@@ -48,10 +48,9 @@ export function QuestionFormDialog({ open, onOpenChange, question, onSuccess, le
         defaultValues: {
             questionTitle: "",
             description: "",
-            category: "Technical Knowledge",
+            category: categories.length > 0 ? categories[0].name : "",
             applicableLevel: defaultLevel || "L3-General",
-            order: 1,
-            weight: 0
+            order: 1
         }
     })
 
@@ -62,20 +61,18 @@ export function QuestionFormDialog({ open, onOpenChange, question, onSuccess, le
                 description: question.description || "",
                 category: question.category,
                 applicableLevel: question.applicableLevel,
-                order: question.order,
-                weight: question.weight || 0
+                order: question.order
             })
         } else {
             reset({
                 questionTitle: "",
                 description: "",
-                category: "Technical Knowledge",
+                category: categories.length > 0 ? categories[0].name : "",
                 applicableLevel: defaultLevel || "L3-General",
-                order: 1,
-                weight: 0
+                order: 1
             })
         }
-    }, [question, reset, defaultLevel])
+    }, [question, reset, defaultLevel, categories])
 
     const onSubmit = async (data: FormData) => {
         setIsLoading(true)
@@ -145,8 +142,8 @@ export function QuestionFormDialog({ open, onOpenChange, question, onSuccess, le
                                             <SelectValue placeholder="Select Category" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {CATEGORIES.map(c => (
-                                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                                            {categories.map(c => (
+                                                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                                             ))}
                                             {/* Allow 'Other' if needed via custom input? For now fixed list is safer */}
                                         </SelectContent>
@@ -181,10 +178,6 @@ export function QuestionFormDialog({ open, onOpenChange, question, onSuccess, le
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Display Order</label>
                             <Input type="number" {...register("order", { valueAsNumber: true })} />
-                        </div>
-                        {/* Hidden Weight Field - kept in form data but not shown to user */}
-                        <div className="hidden">
-                            <Input type="number" {...register("weight", { valueAsNumber: true })} />
                         </div>
                     </div>
 
