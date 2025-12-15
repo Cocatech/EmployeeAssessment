@@ -227,6 +227,7 @@ export function QuestionManagement({ initialQuestions = [], initialStats, levels
                 levels={levels}
                 categories={categories}
                 defaultLevel={selectedLevel === "All" ? undefined : selectedLevel}
+                nextOrder={filteredQuestions.length > 0 ? Math.max(...filteredQuestions.map(q => q.order)) + 1 : 1}
             />
 
             {/* Clear All Dialog */}

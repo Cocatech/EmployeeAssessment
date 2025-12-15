@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
@@ -55,6 +56,10 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
         name: '',
         description: '',
         sortOrder: 0,
+        nameTh: '',
+        nameJa: '',
+        descriptionTh: '',
+        descriptionJa: '',
     });
 
     const handleOpenDialog = (category?: SerializedAssessmentCategory) => {
@@ -64,6 +69,10 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                 name: category.name,
                 description: category.description || '',
                 sortOrder: category.sortOrder,
+                nameTh: (category as any).nameTh || '',
+                nameJa: (category as any).nameJa || '',
+                descriptionTh: (category as any).descriptionTh || '',
+                descriptionJa: (category as any).descriptionJa || '',
             });
         } else {
             setEditingCategory(null);
@@ -71,6 +80,10 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                 name: '',
                 description: '',
                 sortOrder: categories.length + 1,
+                nameTh: '',
+                nameJa: '',
+                descriptionTh: '',
+                descriptionJa: '',
             });
         }
         setIsDialogOpen(true);
@@ -204,33 +217,80 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                         <DialogTitle>{editingCategory ? 'Edit Category' : 'Add New Category'}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Category Name</label>
-                                <Input
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="e.g. Technical Knowledge"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Sort Order</label>
-                                <Input
-                                    type="number"
-                                    value={formData.sortOrder}
-                                    onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) })}
-                                />
-                            </div>
-                        </div>
+                        <Tabs defaultValue="general" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="general">General</TabsTrigger>
+                                <TabsTrigger value="localized">Localization (TH/JA)</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="general" className="space-y-4 pt-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Category Name</label>
+                                        <Input
+                                            value={formData.name}
+                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                            placeholder="e.g. Technical Knowledge"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Sort Order</label>
+                                        <Input
+                                            type="number"
+                                            value={formData.sortOrder}
+                                            onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) })}
+                                        />
+                                    </div>
+                                </div>
 
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium">Description</label>
-                            <Input
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                placeholder="Description of this category..."
-                            />
-                        </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Description</label>
+                                    <Input
+                                        value={formData.description}
+                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        placeholder="Description of this category..."
+                                    />
+                                </div>
+                            </TabsContent>
+
+                            <TabsContent value="localized" className="space-y-4 pt-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Name (Thai)</label>
+                                        <Input
+                                            value={formData.nameTh}
+                                            onChange={(e) => setFormData({ ...formData, nameTh: e.target.value })}
+                                            placeholder="ชื่อหมวดหมู่ (ไทย)"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Name (Japanese)</label>
+                                        <Input
+                                            value={formData.nameJa}
+                                            onChange={(e) => setFormData({ ...formData, nameJa: e.target.value })}
+                                            placeholder="カテゴリ名 (日本語)"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Description (Thai)</label>
+                                        <Input
+                                            value={formData.descriptionTh}
+                                            onChange={(e) => setFormData({ ...formData, descriptionTh: e.target.value })}
+                                            placeholder="คำอธิบาย (ไทย)"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Description (Japanese)</label>
+                                        <Input
+                                            value={formData.descriptionJa}
+                                            onChange={(e) => setFormData({ ...formData, descriptionJa: e.target.value })}
+                                            placeholder="説明 (日本語)"
+                                        />
+                                    </div>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>

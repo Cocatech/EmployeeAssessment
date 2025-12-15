@@ -54,6 +54,11 @@ export async function createAssessmentCategory(data: {
     description?: string;
     sortOrder: number;
     isActive: boolean;
+    // Dual Language
+    nameTh?: string;
+    nameJa?: string;
+    descriptionTh?: string;
+    descriptionJa?: string;
 }): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
@@ -92,6 +97,11 @@ export async function updateAssessmentCategory(
         description?: string;
         sortOrder?: number;
         isActive?: boolean;
+        // Dual Language
+        nameTh?: string;
+        nameJa?: string;
+        descriptionTh?: string;
+        descriptionJa?: string;
     }
 ): Promise<AssessmentCategoryResult> {
     try {

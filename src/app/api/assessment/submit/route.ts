@@ -36,15 +36,16 @@ export async function POST(request: NextRequest) {
     }
 
     // ดึงข้อมูลพนักงานเพื่อเช็ค approver
-    const employees = await getEmployees();
-    const employee = employees.find(e => e.empCode === assessment.employeeId);
+    const { getEmployee } = await import('@/actions/employees');
+    const empResult = await getEmployee(assessment.employeeId);
 
-    if (!employee) {
+    if (!empResult.success || !empResult.data) {
       return NextResponse.json(
         { error: 'Employee not found' },
         { status: 404 }
       );
     }
+    const employee = empResult.data;
 
     // กำหนด next status ตาม workflow
     // Flow: Self → Approver1 → Approver2 → Approver3 → Manager → GM

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 import {
   LayoutDashboard,
   Users,
@@ -24,6 +25,10 @@ interface NavItem {
   requirePermission?: boolean;
 }
 
+interface SidebarProps {
+  logoUrl?: string; // Add optional prop
+}
+
 const allNavItems: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/employees', label: 'Employees', icon: Users, requirePermission: true },
@@ -32,7 +37,7 @@ const allNavItems: NavItem[] = [
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, requirePermission: true },
 ];
 
-export function Sidebar() {
+export function Sidebar({ logoUrl }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { data: session } = useSession();
@@ -72,7 +77,13 @@ export function Sidebar() {
       <div className="flex items-center justify-between p-4 border-b">
         {!collapsed && (
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <span className="text-xl font-bold text-primary">TRTH</span>
+            {logoUrl ? (
+              <div className="relative w-32 h-10">
+                <Image src={logoUrl} alt="Logo" fill className="object-contain object-left" />
+              </div>
+            ) : (
+              <span className="text-xl font-bold text-primary">TRTH</span>
+            )}
           </Link>
         )}
         <Button

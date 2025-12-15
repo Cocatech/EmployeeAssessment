@@ -42,7 +42,11 @@ export async function getEmployees(params?: {
         joinDate: true,
         warningCount: true,
         isActive: true,
-        // Exclude heavy fields like profileImage or relationship IDs not needed for table
+        approver1_ID: true,
+        approver2_ID: true,
+        approver3_ID: true,
+        manager_ID: true,
+        gm_ID: true,
       }
     });
 
@@ -58,11 +62,11 @@ export async function getEmployees(params?: {
       team: emp.team || undefined,
       assessmentLevel: emp.assessmentLevel,
       employeeType: emp.employeeType as 'Permanent' | 'Temporary',
-      approver1_ID: '', // Not needed in list
-      approver2_ID: null,
-      approver3_ID: null,
-      manager_ID: null,
-      gm_ID: '',
+      approver1_ID: emp.approver1_ID || '',
+      approver2_ID: emp.approver2_ID || null,
+      approver3_ID: emp.approver3_ID || null,
+      manager_ID: emp.manager_ID || null,
+      gm_ID: emp.gm_ID || '',
       joinDate: emp.joinDate.toISOString(),
       warningCount: emp.warningCount,
       isActive: emp.isActive,

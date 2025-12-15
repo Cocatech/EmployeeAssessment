@@ -31,19 +31,20 @@ export async function POST(request: NextRequest) {
     // In a real app, this should be a DB join. Here we simulate fetching.
     // Note: getAssessments might not return full employee object with all approver IDs
     // so we might need to fetch employee separately if needed, but let's assume availability or fetch strictly
-    const { getEmployees } = await import('@/actions/employees');
-    const employees = await getEmployees();
-    const employee = employees.find(e => e.empCode === assessment.employeeId);
+    // Get full employee details (need approver chain)
+    const { getEmployee } = await import('@/actions/employees');
+    const empResult = await getEmployee(assessment.employeeId);
 
-    if (!employee) {
+    if (!empResult.success || !empResult.data) {
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
     }
+    const employee = empResult.data;
 
     // 2. Helper to determine next level
     const determineNextStatus = (currentStatus: string): string => {
-      // Flow: ... -> SUBMITTED_APPR1 -> SUBMITTED_APPR2 -> SUBMITTED_APPR3 -> SUBMITTED_MGR -> SUBMITTED_GM -> COMPLETED
-
-      let next = 'COMPLETED';
+      // Flow: ... -> SUBMITTED_APPR1 -> SUBMITTED_APPR2 -> SUBMITTED_APPR3 -> SUBMITTED_MGR -> SUBMITTED_HR -> SUBMITTED_MD -> COMPLETED
+      // Note: GM step is replaced/integrated into this new flow or specific to customer config. 
+      // We strictly follow the requested Manager -> HR -> MD flow here.
 
       // Determine logical next steps based on current status
       switch (currentStatus) {
@@ -60,14 +61,27 @@ export async function POST(request: NextRequest) {
         case 'SUBMITTED_APPR3':
           // Check Manager
           if (employee.manager_ID && employee.manager_ID !== '-') return 'SUBMITTED_MGR';
-        // Fall through to check GM
+          // If no Manager, go to HR
+          return 'SUBMITTED_HR';
 
         case 'SUBMITTED_MGR':
-          // Check GM (Always exists? or check)
-          if (employee.gm_ID && employee.gm_ID !== '-') return 'SUBMITTED_GM';
-          return 'COMPLETED'; // If no GM, complete (unlikely)
+          // Manager -> HR
+          return 'SUBMITTED_HR';
+
+        case 'SUBMITTED_HR':
+          // HR -> MD
+          return 'SUBMITTED_MD';
+
+        case 'SUBMITTED_MD':
+          // MD -> Feedback Required (Manager)
+          return 'FEEDBACK_REQUIRED';
+
+        case 'FEEDBACK_REQUIRED':
+          // Manager confirms feedback -> GM
+          return 'SUBMITTED_GM';
 
         case 'SUBMITTED_GM':
+          // GM -> Completed
           return 'COMPLETED';
 
         default:
@@ -97,7 +111,40 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date().toISOString(),
       };
 
-      // Set completion stamps if finished
+      const now = new Date();
+
+      // Timestamp logic logic
+      if (currentStatus === 'SUBMITTED_APPR1') updateData.approver1Date = now;
+      if (currentStatus === 'SUBMITTED_APPR2') updateData.approver2Date = now;
+      if (currentStatus === 'SUBMITTED_APPR3') updateData.approver3Date = now;
+      if (currentStatus === 'SUBMITTED_MGR') {
+        updateData.managerDate = now;
+        updateData.hrStatus = 'Pending'; // HR is next
+      }
+      if (currentStatus === 'SUBMITTED_HR') {
+        updateData.hrDate = now;
+        updateData.hrStatus = 'Approved';
+        updateData.mdStatus = 'Pending'; // MD is next
+      }
+      if (currentStatus === 'SUBMITTED_MD') {
+        updateData.mdDate = now;
+        updateData.mdStatus = 'Approved';
+      }
+
+      if (currentStatus === 'FEEDBACK_REQUIRED') {
+        updateData.feedbackDate = now;
+      }
+
+      if (currentStatus === 'SUBMITTED_GM') {
+        updateData.gmDate = now;
+        updateData.approvedAt = now;
+        updateData.completedAt = now;
+      }
+
+      if (nextStatus === 'COMPLETED') {
+        updateData.completedAt = new Date().toISOString();
+        // Here you would copy the final score to 'finalScore'
+      }
       if (nextStatus === 'COMPLETED') {
         updateData.completedAt = new Date().toISOString();
         // Here you would copy the final score to 'finalScore'

@@ -1,6 +1,6 @@
 import ScoringForm from '@/components/assessment/ScoringForm';
 import { getAssessment } from '@/actions/assessments';
-import { getEmployee } from '@/actions/employees';
+
 import { getQuestionsByLevel } from '@/actions/questions';
 import { getResponsesByAssessment } from '@/actions/responses';
 import { notFound, redirect } from 'next/navigation';
@@ -28,17 +28,18 @@ export default async function AssessmentScoringPage({ params }: Props) {
   //   redirect(`/dashboard/assessments/${id}`);
   // }
 
-  // ดึงข้อมูล employee
-  const empResult = await getEmployee(assessment.employeeId);
+  // ดึงข้อมูล employee จาก assessment result โดยตรง (ไม่ต้อง fetch ใหม่)
+  // เพราะ getAssessment ทำการ enrich approver positions มาให้แล้ว
+  const employee = assessment.employee;
 
-  if (!empResult.success || !empResult.data) {
+  if (!employee) {
     return <div className="p-8 text-center text-red-600">Employee not found</div>;
   }
 
-  const employee = empResult.data;
-
   // ดึงคำถามตามระดับของพนักงาน
-  const questions = await getQuestionsByLevel(employee.assessmentLevel);
+  // ใช้ targetLevel จาก assessment ก่อน ถ้าไม่มีค่อยใช้ employee.assessmentLevel
+  const targetLevel = (assessment as any).targetLevel || employee.assessmentLevel;
+  const questions = await getQuestionsByLevel(targetLevel);
 
   // ดึงคำตอบที่มีอยู่
   const responses = await getResponsesByAssessment(id);

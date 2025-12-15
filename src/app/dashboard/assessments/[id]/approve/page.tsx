@@ -30,20 +30,27 @@ export default async function AssessmentApprovalPage({ params }: Props) {
   const assessment = assessmentData;
 
   // ตรวจสอบว่าสามารถ approve ได้หรือไม่
-  if (!['SUBMITTED_APPR1', 'SUBMITTED_APPR2', 'SUBMITTED_APPR3', 'SUBMITTED_MGR', 'SUBMITTED_GM'].includes(assessment.status)) {
+  // Use standardized SUBMITTED_* pattern only
+  const validStatuses = [
+    'SUBMITTED_APPR1', 'SUBMITTED_APPR2', 'SUBMITTED_APPR3',
+    'SUBMITTED_MGR', 'SUBMITTED_HR', 'SUBMITTED_MD', 'SUBMITTED_GM',
+    'FEEDBACK_REQUIRED'
+  ];
+
+  if (!validStatuses.includes(assessment.status)) {
     redirect(`/dashboard/assessments/${id}`);
   }
 
   // ดึงข้อมูล employee จาก Assessment Relational Data
-  const employee = assessment.employee as any; // Type assertion if needed
+  const employee = assessment.employee as any;
 
   if (!employee) {
     return <div className="p-8 text-center text-red-600">Employee not found</div>;
   }
 
-  // Permission check - only the correct approver can access this page
+  // Permission check - using standardized SUBMITTED_* pattern
   let isAuthorized = false;
-  let currentUserRole: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'gm' = 'approver1';
+  let currentUserRole: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'md' | 'gm' = 'approver1'; // Default
 
   if (assessment.status === 'SUBMITTED_APPR1') {
     isAuthorized = employee.approver1_ID === currentUserId;
@@ -57,9 +64,30 @@ export default async function AssessmentApprovalPage({ params }: Props) {
   } else if (assessment.status === 'SUBMITTED_MGR') {
     isAuthorized = employee.manager_ID === currentUserId;
     currentUserRole = 'manager';
+  } else if (assessment.status === 'SUBMITTED_HR') {
+    // HR role can access when status is SUBMITTED_HR
+    // Check if user's position code is 'HR'
+    const { isUserHR } = await import('@/actions/settings');
+    const isHR = await isUserHR(currentUserId);
+    if (isHR) {
+      isAuthorized = true;
+      currentUserRole = 'md'; // Use 'md' role type as fallback for HR
+    }
+  } else if (assessment.status === 'SUBMITTED_MD') {
+    // MD Review - check if user's position code is 'MD'
+    const { isUserMD } = await import('@/actions/settings');
+    const isMD = await isUserMD(currentUserId);
+    if (isMD) {
+      isAuthorized = true;
+      currentUserRole = 'md';
+    }
   } else if (assessment.status === 'SUBMITTED_GM') {
     isAuthorized = employee.gm_ID === currentUserId;
     currentUserRole = 'gm';
+  } else if (assessment.status === 'FEEDBACK_REQUIRED') {
+    // Manager gives feedback
+    isAuthorized = employee.manager_ID === currentUserId;
+    currentUserRole = 'manager';
   }
 
   // Redirect if not authorized
@@ -73,38 +101,7 @@ export default async function AssessmentApprovalPage({ params }: Props) {
   // responses included in assessmentData if getAssessment includes it?
   const rawResponses = assessment.responses || await getResponsesByAssessment(id);
 
-  // Convert nulls to undefined to match Response interface if needed
-  const responses = rawResponses.map((r: any) => ({
-    ...r,
-    scoreSelf: r.scoreSelf ?? undefined,
-    scoreAppr1: r.scoreAppr1 ?? undefined,
-    scoreAppr2: r.scoreAppr2 ?? undefined,
-    scoreAppr3: r.scoreAppr3 ?? undefined,
-    scoreMgr: r.scoreMgr ?? undefined,
-    scoreGm: r.scoreGm ?? undefined,
-  }));
-
-  return (
-    <div className="container mx-auto py-6">
-      <ApprovalForm
-        assessmentId={id}
-        assessmentStatus={assessment.status}
-        employee={{
-          empCode: employee.empCode,
-          empName_Eng: employee.empName_Eng,
-          position: employee.position,
-          group: employee.group,
-          profileImage: employee.profileImage,
-        }}
-        questions={questions}
-        responses={responses}
-        currentUserRole={currentUserRole}
-        approver1Id={employee.approver1_ID}
-        approver2Id={employee.approver2_ID}
-        approver3Id={employee.approver3_ID}
-        managerId={employee.manager_ID}
-        gmId={employee.gm_ID}
-      />
-    </div>
-  );
+  // Redirect to score page which has the unified Excel-style UI
+  // ScoringForm now handles all roles including approvers
+  redirect(`/dashboard/assessments/${id}/score`);
 }

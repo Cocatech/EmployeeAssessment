@@ -32,6 +32,15 @@ export async function getQuestions(params?: {
       questionTitle: q.questionTitle,
       description: q.description || '',
       category: q.category as AssessmentQuestion['category'],
+
+      // Dual Language
+      titleTh: q.titleTh || undefined,
+      titleJa: q.titleJa || undefined,
+      descriptionTh: q.descriptionTh || undefined,
+      descriptionJa: q.descriptionJa || undefined,
+      categoryTh: q.categoryTh || undefined,
+      categoryJa: q.categoryJa || undefined,
+
       weight: q.weight,
       maxScore: q.maxScore,
       order: q.order,
@@ -58,6 +67,15 @@ export async function getQuestionsByLevel(level: string): Promise<AssessmentQues
       questionTitle: q.questionTitle,
       description: q.description || '',
       category: q.category as AssessmentQuestion['category'],
+
+      // Dual Language
+      titleTh: q.titleTh || undefined,
+      titleJa: q.titleJa || undefined,
+      descriptionTh: q.descriptionTh || undefined,
+      descriptionJa: q.descriptionJa || undefined,
+      categoryTh: q.categoryTh || undefined,
+      categoryJa: q.categoryJa || undefined,
+
       weight: q.weight,
       maxScore: q.maxScore,
       order: q.order,
@@ -84,6 +102,15 @@ export async function getQuestionsByCategory(category: string): Promise<Assessme
       questionTitle: q.questionTitle,
       description: q.description || '',
       category: q.category as AssessmentQuestion['category'],
+
+      // Dual Language
+      titleTh: q.titleTh || undefined,
+      titleJa: q.titleJa || undefined,
+      descriptionTh: q.descriptionTh || undefined,
+      descriptionJa: q.descriptionJa || undefined,
+      categoryTh: q.categoryTh || undefined,
+      categoryJa: q.categoryJa || undefined,
+
       weight: q.weight,
       maxScore: q.maxScore,
       order: q.order,
@@ -117,12 +144,21 @@ export async function getQuestion(id: string) {
         id: q.id,
         questionTitle: q.questionTitle,
         description: q.description || '',
-        category: q.category,
+        category: q.category as any, // Cast to any/QuestionCategory
+
+        // Dual Language
+        titleTh: q.titleTh || undefined,
+        titleJa: q.titleJa || undefined,
+        descriptionTh: q.descriptionTh || undefined,
+        descriptionJa: q.descriptionJa || undefined,
+        categoryTh: q.categoryTh || undefined,
+        categoryJa: q.categoryJa || undefined,
+
         weight: q.weight,
         maxScore: q.maxScore,
         order: q.order,
         isActive: q.isActive,
-        applicableLevel: q.applicableLevel,
+        applicableLevel: q.applicableLevel as any,
         createdAt: q.createdAt.toISOString(),
         updatedAt: q.updatedAt.toISOString(),
       },
@@ -178,6 +214,14 @@ export async function createQuestion(data: Omit<AssessmentQuestion, 'id' | 'crea
         maxScore: data.maxScore || 5,
         order: data.order,
         isActive: data.isActive !== false,
+
+        // Dual Language
+        titleTh: data.titleTh || null,
+        titleJa: data.titleJa || null,
+        descriptionTh: data.descriptionTh || null,
+        descriptionJa: data.descriptionJa || null,
+        categoryTh: data.categoryTh || null,
+        categoryJa: data.categoryJa || null,
       },
     });
 
@@ -205,6 +249,14 @@ export async function updateQuestion(id: string, data: Partial<AssessmentQuestio
     if (data.maxScore !== undefined) updateData.maxScore = data.maxScore;
     if (data.order !== undefined) updateData.order = data.order;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
+    // Dual Language Updates
+    if (data.titleTh !== undefined) updateData.titleTh = data.titleTh;
+    if (data.titleJa !== undefined) updateData.titleJa = data.titleJa;
+    if (data.descriptionTh !== undefined) updateData.descriptionTh = data.descriptionTh;
+    if (data.descriptionJa !== undefined) updateData.descriptionJa = data.descriptionJa;
+    if (data.categoryTh !== undefined) updateData.categoryTh = data.categoryTh;
+    if (data.categoryJa !== undefined) updateData.categoryJa = data.categoryJa;
 
     await prisma.assessmentQuestion.update({
       where: { id },

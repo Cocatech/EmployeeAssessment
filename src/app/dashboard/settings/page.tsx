@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { Settings, Briefcase, Building, Users, ArrowLeft, ClipboardCheck } from 'lucide-react';
+import { Settings, Briefcase, Building, Users, ArrowLeft, ClipboardCheck, Grip } from 'lucide-react';
 
 export const metadata = {
   title: 'Settings | TRTH Assessment',
@@ -24,6 +24,13 @@ export default async function SettingsPage() {
   }
 
   const settingsCards = [
+    {
+      title: 'General / Branding',
+      description: 'System logos, company name, and appearance',
+      icon: Grip,
+      href: '/dashboard/settings/general',
+      color: 'bg-indigo-500',
+    },
     {
       title: 'Positions',
       description: 'Manage employee positions and job titles',

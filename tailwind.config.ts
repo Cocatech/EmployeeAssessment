@@ -16,6 +16,10 @@ const config: Config = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sarabun)', 'Tahoma', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        tahoma: ['Tahoma', 'sans-serif'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

@@ -70,7 +70,48 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Hide UI elements */
+  header,
+  nav,
+  aside,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset container widths for print */
+  .container,
+  .max-w-\[210mm\] {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure inputs look like text */
+  input,
+  textarea,
+  select {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    resize: none !important;
   }
 }

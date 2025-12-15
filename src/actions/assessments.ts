@@ -3,6 +3,7 @@
 import { prisma, findAssessmentById, findAssessmentsByEmployee, findAssessmentsByPeriod, findPendingAssessments } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import type { Assessment } from '@/types';
+import { getMDConfig } from './settings';
 
 /**
  * Get all assessments with optional filters
@@ -28,7 +29,6 @@ export async function getAssessments(params?: {
     }
 
     const assessments = await prisma.assessment.findMany({
-      where,
       where,
       orderBy: { createdAt: 'desc' },
     });
@@ -72,6 +72,45 @@ export async function getAssessment(id: string) {
       return { success: false, error: 'Assessment not found' };
     }
 
+    // Fetch approver details
+    const approverIds = [
+      assessment.employee.approver1_ID,
+      assessment.employee.approver2_ID,
+      assessment.employee.approver3_ID,
+      assessment.employee.approver3_ID,
+      assessment.employee.manager_ID,
+      assessment.employee.gm_ID
+    ].filter(Boolean) as string[];
+
+    // Fetch MD Config to get MD Name
+    const mdEmpCode = await getMDConfig();
+    if (mdEmpCode && !approverIds.includes(mdEmpCode)) {
+      approverIds.push(mdEmpCode);
+    }
+
+    const approvers = await prisma.employee.findMany({
+      where: { empCode: { in: approverIds } },
+      select: { empCode: true, empName_Eng: true, position: true }
+    });
+
+    const approverMap = new Map(approvers.map(a => [a.empCode, a]));
+
+    const enhancedEmployee = {
+      ...assessment.employee,
+      approver1_Name: assessment.employee.approver1_ID ? approverMap.get(assessment.employee.approver1_ID!)?.empName_Eng : undefined,
+      approver1_Position: assessment.employee.approver1_ID ? approverMap.get(assessment.employee.approver1_ID!)?.position : undefined,
+      approver2_Name: assessment.employee.approver2_ID ? approverMap.get(assessment.employee.approver2_ID!)?.empName_Eng : undefined,
+      approver2_Position: assessment.employee.approver2_ID ? approverMap.get(assessment.employee.approver2_ID!)?.position : undefined,
+      approver3_Name: assessment.employee.approver3_ID ? approverMap.get(assessment.employee.approver3_ID!)?.empName_Eng : undefined,
+      approver3_Position: assessment.employee.approver3_ID ? approverMap.get(assessment.employee.approver3_ID!)?.position : undefined,
+      manager_Name: assessment.employee.manager_ID ? approverMap.get(assessment.employee.manager_ID!)?.empName_Eng : undefined,
+      manager_Position: assessment.employee.manager_ID ? approverMap.get(assessment.employee.manager_ID!)?.position : undefined,
+      gm_Name: assessment.employee.gm_ID ? approverMap.get(assessment.employee.gm_ID!)?.empName_Eng : undefined,
+      md_Name: mdEmpCode ? approverMap.get(mdEmpCode)?.empName_Eng : undefined,
+      md_Position: mdEmpCode ? approverMap.get(mdEmpCode)?.position : undefined,
+      gm_Position: assessment.employee.gm_ID ? approverMap.get(assessment.employee.gm_ID!)?.position : undefined,
+    };
+
     return {
       success: true,
       data: {
@@ -83,6 +122,8 @@ export async function getAssessment(id: string) {
         status: assessment.status,
         employeeId: assessment.employeeId,
         assessorId: assessment.assessorId || '',
+        targetLevel: assessment.targetLevel || undefined,
+        currentStage: assessment.currentStage,
         periodStart: assessment.periodStart.toISOString(),
         periodEnd: assessment.periodEnd.toISOString(),
         dueDate: assessment.dueDate?.toISOString() || '',
@@ -93,7 +134,38 @@ export async function getAssessment(id: string) {
         updatedAt: assessment.updatedAt.toISOString(),
         submittedAt: assessment.submittedAt?.toISOString() || undefined,
         approvedAt: assessment.approvedAt?.toISOString() || undefined,
-        employee: assessment.employee,
+        // Approver Comments
+        approver1Good: assessment.approver1Good || undefined,
+        approver1Improve: assessment.approver1Improve || undefined,
+        approver2Good: assessment.approver2Good || undefined,
+        approver2Improve: assessment.approver2Improve || undefined,
+        approver3Good: assessment.approver3Good || undefined,
+        approver3Improve: assessment.approver3Improve || undefined,
+        // Manager Options
+        managerAction: assessment.managerAction || undefined,
+        managerReason: assessment.managerReason || undefined,
+        // HR Review
+        hrStatus: assessment.hrStatus || undefined,
+        hrDate: assessment.hrDate?.toISOString() || undefined,
+        hrNote: assessment.hrNote || undefined,
+
+        // MD & Feedback
+        mdStatus: assessment.mdStatus || undefined,
+        mdDate: assessment.mdDate?.toISOString() || undefined,
+        mdNote: assessment.mdNote || undefined,
+        feedbackDate: assessment.feedbackDate?.toISOString() || undefined,
+
+        // Dates for Approvers
+        approver1Date: assessment.approver1Date?.toISOString() || undefined,
+        approver2Date: assessment.approver2Date?.toISOString() || undefined,
+        approver3Date: assessment.approver3Date?.toISOString() || undefined,
+
+        // GM Confirmation
+        gmStatus: assessment.gmStatus || undefined,
+        gmDate: assessment.gmDate?.toISOString() || undefined,
+        gmNote: assessment.gmNote || undefined,
+
+        employee: enhancedEmployee,
         responses: assessment.responses,
       },
     };
@@ -146,6 +218,36 @@ export async function updateAssessment(id: string, data: Partial<Assessment>) {
     if (data.completedAt !== undefined) updateData.completedAt = new Date(data.completedAt);
     if (data.submittedAt !== undefined) updateData.submittedAt = new Date(data.submittedAt);
     if (data.approvedAt !== undefined) updateData.approvedAt = new Date(data.approvedAt);
+
+    // Approver Comments
+    if (data.approver1Good !== undefined) updateData.approver1Good = data.approver1Good;
+    if (data.approver1Improve !== undefined) updateData.approver1Improve = data.approver1Improve;
+    if (data.approver2Good !== undefined) updateData.approver2Good = data.approver2Good;
+    if (data.approver2Improve !== undefined) updateData.approver2Improve = data.approver2Improve;
+    if (data.approver3Good !== undefined) updateData.approver3Good = data.approver3Good;
+    if (data.approver3Improve !== undefined) updateData.approver3Improve = data.approver3Improve;
+
+    // Manager Options
+    if (data.managerAction !== undefined) updateData.managerAction = data.managerAction;
+    if (data.managerReason !== undefined) updateData.managerReason = data.managerReason;
+
+    // HR Review
+    if (data.hrStatus !== undefined) updateData.hrStatus = data.hrStatus;
+    if (data.hrNote !== undefined) updateData.hrNote = data.hrNote;
+    if (data.hrDate !== undefined) updateData.hrDate = data.hrDate ? new Date(data.hrDate) : null;
+
+    // MD Review
+    if (data.mdStatus !== undefined) updateData.mdStatus = data.mdStatus;
+    if (data.mdNote !== undefined) updateData.mdNote = data.mdNote;
+    if (data.mdDate !== undefined) updateData.mdDate = data.mdDate ? new Date(data.mdDate) : null;
+
+    // Feedback
+    if (data.feedbackDate !== undefined) updateData.feedbackDate = data.feedbackDate ? new Date(data.feedbackDate) : null;
+
+    // GM Confirmation
+    if (data.gmStatus !== undefined) updateData.gmStatus = data.gmStatus;
+    if (data.gmNote !== undefined) updateData.gmNote = data.gmNote;
+    if (data.gmDate !== undefined) updateData.gmDate = data.gmDate ? new Date(data.gmDate) : null;
 
     const updated = await prisma.assessment.update({
       where: { id },
@@ -567,11 +669,43 @@ export async function submitSelfAssessment(assessmentId: string, responses: any[
 }
 
 /**
+ * Reject assessment
+ */
+export async function rejectAssessment(assessmentId: string, note?: string) {
+  try {
+    const assessment = await prisma.assessment.findUnique({
+      where: { id: assessmentId },
+      include: { employee: true },
+    });
+
+    if (!assessment) {
+      return { success: false, error: 'Assessment not found' };
+    }
+
+    await prisma.assessment.update({
+      where: { id: assessmentId },
+      data: {
+        status: 'REJECTED',
+        updatedAt: new Date(),
+        // We might want to clear currentStage or set it back to employee?
+        currentStage: assessment.employeeId,
+      },
+    });
+
+    revalidatePath(`/dashboard/assessments/${assessmentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error rejecting assessment:', error);
+    return { success: false, error: 'Failed to reject assessment' };
+  }
+}
+
+/**
  * Approve assessment (dynamic approval chain)
  */
 export async function approveAssessment(
   assessmentId: string,
-  stage: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'md',
+  stage: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'hr' | 'md' | 'gm' | 'feedback',
   note?: string
 ) {
   try {
@@ -598,58 +732,117 @@ export async function approveAssessment(
       updateData.approver1Date = new Date();
       updateData.approver1Note = note;
 
-      // Check if employee has approver2
+      // Check if Approver 2 exists
       if (employee.approver2_ID) {
-        nextStage = 'PendingApprover2';
+        nextStage = 'SUBMITTED_APPR2';
         nextPerson = employee.approver2_ID;
         updateData.approver2Status = 'Pending';
-      } else {
-        // Skip to manager
-        nextStage = 'PendingManager';
+      } else if (employee.approver3_ID) {
+        // Skip to Approver 3
+        nextStage = 'SUBMITTED_APPR3';
+        nextPerson = employee.approver3_ID;
+        updateData.approver3Status = 'Pending';
+      } else if (employee.manager_ID) {
+        // Skip to Manager
+        nextStage = 'SUBMITTED_MGR';
         nextPerson = employee.manager_ID;
         updateData.managerStatus = 'Pending';
+      } else {
+        // No approver 2, 3, or manager - go to HR
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
       }
     } else if (stage === 'approver2') {
       updateData.approver2Status = 'Approved';
       updateData.approver2Date = new Date();
       updateData.approver2Note = note;
 
-      // Check if employee has approver3
+      // Check if Approver 3 exists
       if (employee.approver3_ID) {
-        nextStage = 'PendingApprover3';
+        nextStage = 'SUBMITTED_APPR3';
         nextPerson = employee.approver3_ID;
         updateData.approver3Status = 'Pending';
-      } else {
-        // Skip to manager
-        nextStage = 'PendingManager';
+      } else if (employee.manager_ID) {
+        // Skip to Manager
+        nextStage = 'SUBMITTED_MGR';
         nextPerson = employee.manager_ID;
         updateData.managerStatus = 'Pending';
+      } else {
+        // No approver 3 or manager - go to HR
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
       }
     } else if (stage === 'approver3') {
       updateData.approver3Status = 'Approved';
       updateData.approver3Date = new Date();
       updateData.approver3Note = note;
 
-      // Go to manager
-      nextStage = 'PendingManager';
-      nextPerson = employee.manager_ID;
-      updateData.managerStatus = 'Pending';
+      // Check if Manager exists
+      if (employee.manager_ID) {
+        nextStage = 'SUBMITTED_MGR';
+        nextPerson = employee.manager_ID;
+        updateData.managerStatus = 'Pending';
+      } else {
+        // No manager - go to HR
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
+      }
     } else if (stage === 'manager') {
       updateData.managerStatus = 'Approved';
       updateData.managerDate = new Date();
       updateData.managerNote = note;
 
+      // Go to HR (New Flow: Manager -> HR -> MD -> Feedback -> GM)
+      nextStage = 'SUBMITTED_HR';
+      updateData.hrStatus = 'Pending';
+
+    } else if (stage === 'hr') {
+      // HR Review completed
+      updateData.hrStatus = 'Approved';
+      updateData.hrDate = new Date();
+      updateData.hrNote = note;
+
       // Go to MD
-      nextStage = 'PendingMD';
-      nextPerson = employee.gm_ID;
-      updateData.mdStatus = 'Pending';
+      const mdSetting = await prisma.systemSetting.findUnique({ where: { key: 'md_code' } });
+      const mdId = mdSetting?.value;
+
+      if (mdId) {
+        nextStage = 'SUBMITTED_MD';
+        nextPerson = mdId;
+        updateData.mdStatus = 'Pending';
+      } else {
+        // If no MD set, skip to Feedback
+        console.warn('No MD configured in settings, skipping MD stage');
+        nextStage = 'FEEDBACK_REQUIRED';
+        nextPerson = employee.manager_ID;
+      }
+
     } else if (stage === 'md') {
       updateData.mdStatus = 'Approved';
       updateData.mdDate = new Date();
       updateData.mdNote = note;
 
+      // Go to Feedback (Manager)
+      nextStage = 'FEEDBACK_REQUIRED';
+      nextPerson = employee.manager_ID;
+      // No status field for feedback, just the stage
+
+    } else if (stage === 'feedback') {
+      // Manager confirms feedback
+      updateData.feedbackDate = new Date();
+
+      // Go to GM
+      nextStage = 'SUBMITTED_GM';
+      nextPerson = employee.gm_ID;
+      updateData.gmStatus = 'Pending';
+
+    } else if (stage === 'gm') {
+      updateData.gmStatus = 'Approved';
+      updateData.gmDate = new Date();
+      updateData.gmNote = note;
+
       // Complete
-      nextStage = 'Completed';
+      nextStage = 'COMPLETED';
       nextPerson = null;
       updateData.completedAt = new Date();
     }
@@ -675,7 +868,7 @@ export async function approveAssessment(
           link: `/dashboard/assessments/${assessmentId}/approve`,
         },
       });
-    } else if (nextStage === 'Completed') {
+    } else if (nextStage === 'COMPLETED') {
       // Notify employee of completion
       await prisma.notification.create({
         data: {
@@ -699,53 +892,4 @@ export async function approveAssessment(
   }
 }
 
-/**
- * Reject assessment (returns to employee for revision)
- */
-export async function rejectAssessment(
-  assessmentId: string,
-  stage: string,
-  reason: string
-) {
-  try {
-    const assessment = await prisma.assessment.findUnique({
-      where: { id: assessmentId },
-      include: { employee: true },
-    });
 
-    if (!assessment) {
-      return { success: false, error: 'Assessment not found' };
-    }
-
-    // Update assessment to rejected state
-    await prisma.assessment.update({
-      where: { id: assessmentId },
-      data: {
-        status: 'Rejected',
-        rejectionStage: stage,
-        rejectionReason: reason,
-        currentStage: assessment.employeeId,
-      },
-    });
-
-    // Notify employee
-    await prisma.notification.create({
-      data: {
-        userId: assessment.employeeId,
-        type: 'Rejected',
-        title: 'Assessment Rejected',
-        message: `Your assessment has been rejected. Reason: ${reason}`,
-        assessmentId: assessmentId,
-        link: `/dashboard/assessments/${assessmentId}`,
-      },
-    });
-
-    revalidatePath('/dashboard/assessments');
-    revalidatePath(`/dashboard/assessments/${assessmentId}`);
-
-    return { success: true, message: 'Assessment rejected' };
-  } catch (error) {
-    console.error('Error rejecting assessment:', error);
-    return { success: false, error: 'Failed to reject assessment' };
-  }
-}

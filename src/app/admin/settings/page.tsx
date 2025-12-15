@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Upload } from 'lucide-react';
-import { toast } from 'sonner';
+
 
 export default function SettingsPage() {
     const [isUploading, setIsUploading] = useState(false);

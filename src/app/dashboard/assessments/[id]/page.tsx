@@ -2,14 +2,16 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit, Send, CheckCircle, XCircle, Users, Trash2, PlayCircle } from 'lucide-react';
 import Link from 'next/link';
-import { getAssessments } from '@/actions/assessments';
-import { getEmployees, getEmployee } from '@/actions/employees';
+import { getAssessments, getAssessment } from '@/actions/assessments';
+import { getEmployees } from '@/actions/employees';
 import { getResponsesByAssessment } from '@/actions/responses';
 import { getQuestionsByLevel } from '@/actions/questions';
 import { notFound } from 'next/navigation';
 import { DraftActions } from '@/components/assessment/DraftActions';
 import { AssessmentExcelView } from '@/components/assessment/AssessmentExcelView';
 import { auth } from '@/lib/auth';
+import { getSystemSettings, isUserHR, isUserMD } from '@/actions/settings';
+import { getAssessmentLevels } from '@/actions/levels';
 
 interface Props {
   params: Promise<{
@@ -20,13 +22,14 @@ interface Props {
 export default async function AssessmentDetailPage({ params }: Props) {
   const { id } = await params;
 
-  // ดึงข้อมูล assessment
-  const assessments = await getAssessments();
-  const assessment = assessments.find(a => a.id === id);
+  // ดึงข้อมูล assessment โดยใช้ getAssessment (singular) เพื่อให้ได้ employee ที่ enrich data แล้ว
+  const assessmentResult = await getAssessment(id);
 
-  if (!assessment) {
+  if (!assessmentResult.success || !assessmentResult.data) {
     notFound();
   }
+
+  const assessment = assessmentResult.data;
 
   // Get current user session for permission check
   const session = await auth();
@@ -40,9 +43,9 @@ export default async function AssessmentDetailPage({ params }: Props) {
   const isOwner = assessment.employeeId === currentUserId;
   const statusUpper = assessment.status.toUpperCase();
 
-  // ดึงข้อมูล employee
-  const empResult = await getEmployee(assessment.employeeId);
-  const employee = empResult.success ? empResult.data : null;
+  // ดึงข้อมูล employee จาก assessment result โดยตรง (ไม่ต้อง fetch ใหม่)
+  // เพราะ getAssessment ทำการ enrich approver positions มาให้แล้ว
+  const employee = assessment.employee;
 
   // ดึงคำถามตาม targetLevel ของ assessment (ใช้ targetLevel ที่เก็บใน assessment)
   // ถ้าไม่มี targetLevel ให้ใช้ employee.assessmentLevel เป็น fallback
@@ -59,19 +62,46 @@ export default async function AssessmentDetailPage({ params }: Props) {
     responses.map(r => [r.questionId, r])
   );
 
+  const settings = await getSystemSettings();
+  const formLogo = settings.form_logo;
+
+  // Check if current user is HR or MD based on their position code
+  const isCurrentUserHR = await isUserHR(currentUserId);
+  const isCurrentUserMD = await isUserMD(currentUserId);
+
+  const levels = await getAssessmentLevels();
+  const currentLevel = levels.find(l => l.code === targetLevel);
+  // Prioritize Level-specific title, then Global setting (legacy), then default
+  const assessmentTitle = currentLevel?.formTitle || settings.assessment_title;
+
   const getStatusBadge = (status: string) => {
-    const statusConfig = {
+    const statusConfig: Record<string, { color: string; label: string }> = {
       DRAFT: { color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Draft' },
-      SUBMITTED_APPR1: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'With Approver 1' },
+      Draft: { color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Draft' },
+      Assigned: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Assigned' },
+
+      // Pending* pattern - new convention
+      PendingApprover1: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'With Approver 1' },
+      PendingApprover2: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'With Approver 2' },
+      PendingApprover3: { color: 'bg-purple-100 text-purple-800 border-purple-200', label: 'With Approver 3' },
+      PendingManager: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'With Manager' },
+      PendingMD: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'With MD' },
+      PendingHR: { color: 'bg-pink-100 text-pink-800 border-pink-200', label: 'With HR' },
+      PendingGM: { color: 'bg-cyan-100 text-cyan-800 border-cyan-200', label: 'With GM' },
+      FeedbackRequired: { color: 'bg-rose-100 text-rose-800 border-rose-200', label: 'Feedback Required' },
+
+      // SUBMITTED_* pattern - legacy
+      SUBMITTED_APPR1: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'With Approver 1' },
       SUBMITTED_APPR2: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'With Approver 2' },
       SUBMITTED_APPR3: { color: 'bg-purple-100 text-purple-800 border-purple-200', label: 'With Approver 3' },
       SUBMITTED_MGR: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'With Manager' },
       SUBMITTED_GM: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'With MD' },
+
       COMPLETED: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Completed' },
       REJECTED: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Rejected' },
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || { color: 'bg-gray-100', label: status };
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status };
 
     return (
       <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-sm font-medium ${config.color}`}>
@@ -193,12 +223,42 @@ export default async function AssessmentDetailPage({ params }: Props) {
               </Link>
             )}
 
-            {/* GM/MD Review */}
+            {/* HR Review - Only show to HR users */}
+            {assessment.status === 'SUBMITTED_HR' && isCurrentUserHR && (
+              <Link href={`/dashboard/assessments/${id}/approve`}>
+                <Button className="bg-purple-600 hover:bg-purple-700">
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  HR Review & Verify
+                </Button>
+              </Link>
+            )}
+
+            {/* MD Review - Only show to MD users */}
+            {assessment.status === 'SUBMITTED_MD' && isCurrentUserMD && (
+              <Link href={`/dashboard/assessments/${id}/approve`}>
+                <Button className="bg-orange-600 hover:bg-orange-700">
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  MD Review & Approve
+                </Button>
+              </Link>
+            )}
+
+            {/* GM Review */}
             {assessment.status === 'SUBMITTED_GM' && employee?.gm_ID === currentUserId && (
               <Link href={`/dashboard/assessments/${id}/approve`}>
                 <Button>
                   <CheckCircle className="mr-2 h-4 w-4" />
-                  MD Review
+                  GM Confirm
+                </Button>
+              </Link>
+            )}
+
+            {/* Feedback Required */}
+            {assessment.status === 'FEEDBACK_REQUIRED' && employee?.manager_ID === currentUserId && (
+              <Link href={`/dashboard/assessments/${id}/approve`}>
+                <Button>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Give Feedback
                 </Button>
               </Link>
             )}
@@ -223,6 +283,8 @@ export default async function AssessmentDetailPage({ params }: Props) {
           currentUserId={currentUserId}
           isOwner={isOwner}
           userRole={role}
+          formLogo={formLogo}
+          assessmentTitle={assessmentTitle}
         />
       )}
     </div>

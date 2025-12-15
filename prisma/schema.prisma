@@ -57,6 +57,15 @@ model AssessmentQuestion {
   questionTitle   String
   description     String?
   category        String   // Technical, Leadership, Communication, etc.
+  
+  // Dual Language Support
+  titleTh         String?
+  titleJa         String?
+  descriptionTh   String?
+  descriptionJa   String?
+  categoryTh      String?
+  categoryJa      String?
+  
   weight          Float    // Percentage weight in assessment
   maxScore        Float    @default(5)
   order           Int      // Display order
@@ -123,9 +132,36 @@ model Assessment {
   mdDate          DateTime?
   mdNote          String?  @db.Text
   
+  // Feedback Tracking (Manager -> Employee)
+  feedbackDate    DateTime? // Date manager gave feedback after MD approval
+
+  // GM Confirmation
+  gmStatus        String? // Approved/Rejected
+  gmDate          DateTime?
+  gmNote          String? @db.Text
+  
   // Scores
   score           Float?   // Current/interim score
   finalScore      Float?   // Final approved score
+
+  // Approver Comments (Good Points & Improvement Points)
+  approver1Good    String? @db.Text
+  approver1Improve String? @db.Text
+  
+  approver2Good    String? @db.Text
+  approver2Improve String? @db.Text
+  
+  approver3Good    String? @db.Text
+  approver3Improve String? @db.Text
+
+  // Manager Promotion/Demotion Options
+  managerAction    String? // "NO_CHANGE", "PROMOTION", "DEMOTION", "TERMINATION"
+  managerReason    String? @db.Text // Required if Demotion or Termination
+
+  // HR Review
+  hrStatus         String? // Pending, Checked, Rejected
+  hrDate           DateTime?
+  hrNote           String? @db.Text
   
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -321,8 +357,16 @@ model AssessmentLevel {
   id          String   @id @default(cuid())
   code        String   @unique // e.g., L1-Supplier
   name        String   // e.g., Supplier
+  
+  // Dual Language Support
+  nameTh      String?
+  nameJa      String?
+  descriptionTh String?
+  descriptionJa String?
+  
   description String?  // e.g., ผู้จัดหา/ซัพพลายเออร์
   label       String   // e.g., L1-Supplier - Supplier (ผู้จัดหา/ซัพพลายเออร์)
+  formTitle   String?  // Custom title for the assessment form (e.g. "OPERATOR EVALUATION SHEET")
   sortOrder   Int      @default(0)
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
@@ -358,6 +402,13 @@ model Notification {
 model AssessmentCategory {
   id          String   @id @default(cuid())
   name        String   @unique
+  
+  // Dual Language Support
+  nameTh      String?
+  nameJa      String?
+  descriptionTh String?
+  descriptionJa String?
+  
   description String?
   sortOrder   Int      @default(0)
   isActive    Boolean  @default(true)
@@ -365,4 +416,18 @@ model AssessmentCategory {
   updatedAt   DateTime @updatedAt
 
   @@map("assessment_categories")
+}
+
+// ============================================
+// System Settings (Key-Value Store)
+// ============================================
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  label     String?
+  type      String   // image, text, boolean, number
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
 }

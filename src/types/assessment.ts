@@ -4,11 +4,16 @@
 
 export type AssessmentStatus =
   | 'DRAFT'
+  | 'Draft'
+  | 'Assigned' // Added to match actions
   | 'SUBMITTED_APPR1'
   | 'SUBMITTED_APPR2'
   | 'SUBMITTED_APPR3'
   | 'SUBMITTED_MGR'
-  | 'SUBMITTED_GM'
+  | 'SUBMITTED_HR'   // New
+  | 'SUBMITTED_MD'   // New
+  | 'FEEDBACK_REQUIRED' // New: Manager must give feedback
+  | 'SUBMITTED_GM'   // Legacy/New
   | 'COMPLETED'
   | 'REJECTED';
 
@@ -56,6 +61,8 @@ export interface Assessment {
   status: AssessmentStatus;
   employeeId: string;
   assessorId: string;
+  targetLevel?: string; // from Prisma schema
+  currentStage?: string;
   periodStart: string;
   periodEnd: string;
   dueDate: string;
@@ -66,6 +73,38 @@ export interface Assessment {
   updatedAt: string;
   submittedAt?: string; // When first submitted
   approvedAt?: string; // When fully approved
+
+  // Approver Comments
+  approver1Good?: string;
+  approver1Improve?: string;
+  approver2Good?: string;
+  approver2Improve?: string;
+  approver3Good?: string;
+  approver3Improve?: string;
+
+  approver1Date?: string;
+  approver2Date?: string;
+  approver3Date?: string;
+
+  // Manager Options
+  managerAction?: string;
+  managerReason?: string;
+
+  // HR Review
+  hrStatus?: string;
+  hrDate?: string;
+  hrNote?: string;
+
+  // MD & Feedback
+  mdStatus?: string;
+  mdDate?: string;
+  mdNote?: string;
+  feedbackDate?: string;
+
+  // GM Confirmation
+  gmStatus?: string;
+  gmDate?: string;
+  gmNote?: string;
 }
 
 /**
@@ -76,6 +115,15 @@ export interface AssessmentQuestion {
   assessmentId?: string; // Optional - for master questions
   category: QuestionCategory; // ใช้ QuestionCategory type
   questionTitle: string; // Short title/topic
+
+  // Dual Language Support (optional)
+  titleTh?: string;
+  titleJa?: string;
+  descriptionTh?: string;
+  descriptionJa?: string;
+  categoryTh?: string;
+  categoryJa?: string;
+
   description?: string; // Detailed description/criteria
   weight: number; // น้ำหนัก % (รวมต้อง = 100)
   maxScore: number; // คะแนนเต็ม (default: 5)

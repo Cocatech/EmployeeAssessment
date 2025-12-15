@@ -36,7 +36,13 @@ export async function createAssessmentLevel(data: {
     name: string;
     description?: string;
     label: string;
+    formTitle?: string;
     sortOrder: number;
+    // Dual Language
+    nameTh?: string;
+    nameJa?: string;
+    descriptionTh?: string;
+    descriptionJa?: string;
 }): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
@@ -67,8 +73,14 @@ export async function updateAssessmentLevel(
         name?: string;
         description?: string;
         label?: string;
+        formTitle?: string;
         sortOrder?: number;
         isActive?: boolean;
+        // Dual Language
+        nameTh?: string;
+        nameJa?: string;
+        descriptionTh?: string;
+        descriptionJa?: string;
     }
 ): Promise<AssessmentLevelResult> {
     try {
