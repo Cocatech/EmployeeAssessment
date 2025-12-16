@@ -77,7 +77,10 @@ export async function findAssessmentById(id: string) {
 
 export async function findAssessmentsByEmployee(empCode: string) {
   return prisma.assessment.findMany({
-    where: { employeeId: empCode },
+    where: {
+      employeeId: empCode,
+      isDraft: false
+    },
     include: {
       employee: true,
       assessor: true,
@@ -94,6 +97,7 @@ export async function findAssessmentsByPeriod(year: number, quarter: number) {
     where: {
       periodStart: { gte: startDate },
       periodEnd: { lte: endDate },
+      isDraft: false,
     },
     include: {
       employee: true,
@@ -107,6 +111,7 @@ export async function findPendingAssessments() {
   return prisma.assessment.findMany({
     where: {
       status: { in: ['Pending', 'InProgress'] },
+      isDraft: false,
     },
     include: {
       employee: true,

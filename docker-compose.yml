@@ -8,12 +8,13 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: trth_assessment
+      TZ: Asia/Bangkok
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d trth_assessment"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d trth_assessment" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -40,6 +41,7 @@ services:
       - NEXTAUTH_URL=http://localhost:3000
       - NEXTAUTH_SECRET=development-secret-key-change-in-production
       - CHOKIDAR_USEPOLLING=true
+      - TZ=Asia/Bangkok
     volumes:
       - .:/app
       - /app/node_modules

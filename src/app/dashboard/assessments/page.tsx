@@ -2,8 +2,9 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ClipboardCheck, Plus, FileText, Clock, CheckCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import { getAssessments } from '@/actions/assessments';
+import { getAssessmentsPaginated } from '@/actions/assessments';
 import { getEmployees } from '@/actions/employees';
+import { PaginationControl } from '@/components/ui/pagination-control';
 import { auth } from '@/lib/auth';
 import { DeleteAssessmentButton } from '@/components/assessment/DeleteAssessmentButton';
 
@@ -12,7 +13,11 @@ export const metadata = {
   description: 'Manage employee assessments',
 };
 
-export default async function DashboardAssessmentsPage() {
+export default async function DashboardAssessmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; status?: string }>;
+}) {
   // Get current user from session
   const session = await auth();
   const currentUserSession = session?.user as any;
@@ -20,18 +25,30 @@ export default async function DashboardAssessmentsPage() {
   const userType = currentUserSession?.userType;
   const currentUserId = currentUserSession?.empCode || '';
 
-  // ดึงข้อมูลจาก database
-  const assessments = await getAssessments();
-  const employees = await getEmployees();
-
-  const currentUser = employees.find(e => e.empCode === currentUserId);
-
   // Check if user has permission to create assessments
   // Only allow: System Admin or Employee Admin
   const isAdmin = userType === 'SYSTEM_ADMIN' || role === 'HR';
 
   // Only Admin can create assessments
   const canCreateAssessment = isAdmin;
+
+  // ดึงข้อมูลจาก database
+  const page = Number((await searchParams).page) || 1;
+  const limit = 5; // Reduced for testing pagination UI
+
+  const { data: assessments, metadata } = await getAssessmentsPaginated({
+    excludeAssignedDrafts: true, // Optimize: Filter at DB level
+    page,
+    limit,
+    viewerId: currentUserId,
+    isAdmin,
+    status: (await searchParams).status,
+  });
+  const employees = await getEmployees();
+
+  const currentUser = employees.find(e => e.empCode === currentUserId);
+
+
 
   // Check if current user is MD
   const { getMDConfig } = await import('@/actions/settings');
@@ -48,45 +65,10 @@ export default async function DashboardAssessmentsPage() {
   });
 
   // Filter assessments based on permission
-  const filteredAssessments = assessments.filter(assessment => {
-    const employee = employees.find(e => e.empCode === assessment.employeeId);
-    const statusUpper = assessment.status.toUpperCase();
-
-    // Admin เห็นทั้งหมด (ทุก Draft และทุก Assessment)
-    if (isAdmin) {
-      return true;
-    }
-
-    // Employee sees their own assessments (Assigned, In Progress, Completed, etc.)
-    if (assessment.employeeId === currentUserId) {
-      return true;
-    }
-
-    if (!employee) return false;
-
-    // Approvers see ALL assessments for employees in their approval chain
-    // (except Draft which is admin-only template)
-    if (statusUpper !== 'DRAFT') {
-      // Is current user an approver for this employee?
-      const isApprover =
-        employee.approver1_ID === currentUserId ||
-        employee.approver2_ID === currentUserId ||
-        employee.approver3_ID === currentUserId ||
-        employee.manager_ID === currentUserId ||
-        employee.gm_ID === currentUserId;
-
-      if (isApprover) {
-        return true;
-      }
-
-      // MD sees assessments with SUBMITTED_MD or SUBMITTED_HR status
-      if (isMD && (statusUpper === 'SUBMITTED_MD' || statusUpper === 'SUBMITTED_HR')) {
-        return true;
-      }
-    }
-
-    return false;
-  });
+  // Filter assessments based on permission
+  // Note: Most filtering is now done at DB level in getAssessmentsPaginated
+  // We keep this variable name to minimize refactoring diffs, but it's now directly the paginated data
+  const filteredAssessments = assessments;
 
   // สร้าง map สำหรับหา employee info จาก empCode
   const employeeMap = new Map(
@@ -310,6 +292,15 @@ export default async function DashboardAssessmentsPage() {
           </div>
         )}
       </Card>
+
+      <PaginationControl
+        currentPage={metadata.page}
+        totalPages={metadata.totalPages}
+        baseUrl="/dashboard/assessments"
+        searchParams={{
+          status: await searchParams.then(p => p.status)
+        }}
+      />
     </div>
   );
   // End of DashboardAssessmentsPage component

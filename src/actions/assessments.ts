@@ -14,6 +14,7 @@ export async function getAssessments(params?: {
   status?: string;
   year?: number;
   quarter?: number;
+  excludeAssignedDrafts?: boolean;
 }): Promise<Assessment[]> {
   try {
     const where: any = {};
@@ -27,6 +28,17 @@ export async function getAssessments(params?: {
         { periodStart: { gte: startDate } },
         { periodEnd: { lte: endDate } }
       ];
+
+    }
+
+    // Filter out Assigned Drafts (Master Templates) if requested
+    if (params?.excludeAssignedDrafts) {
+      where.NOT = {
+        AND: [
+          { isDraft: true },
+          { status: 'Assigned' }
+        ]
+      };
     }
 
     const assessments = await prisma.assessment.findMany({
@@ -56,6 +68,123 @@ export async function getAssessments(params?: {
       submittedAt: assessment.submittedAt?.toISOString() || undefined,
       approvedAt: assessment.approvedAt?.toISOString() || undefined,
     }));
+  } catch (error) {
+    console.error('Error fetching assessments:', error);
+    throw new Error('Failed to fetch assessments');
+  }
+}
+
+/**
+ * Get paginated assessments
+ */
+export async function getAssessmentsPaginated(params?: {
+  empCode?: string;
+  status?: string;
+  year?: number;
+  quarter?: number;
+  excludeAssignedDrafts?: boolean;
+  page?: number;
+  limit?: number;
+  // Advanced filtering for Roles
+  viewerId?: string;
+  isAdmin?: boolean;
+}) {
+  try {
+    const where: any = {};
+    const page = params?.page || 1;
+    const limit = params?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    // Role-based Access Control (Row Level Security logic)
+    if (params?.viewerId && !params?.isAdmin) {
+      where.OR = [
+        { employeeId: params.viewerId }, // Own assessment
+        { assessorId: params.viewerId }, // Is Assessor
+        // Approver logic (using relation filter)
+        {
+          employee: {
+            OR: [
+              { manager_ID: params.viewerId },
+              { approver1_ID: params.viewerId },
+              { approver2_ID: params.viewerId },
+              { approver3_ID: params.viewerId },
+              { gm_ID: params.viewerId },
+            ]
+          }
+        }
+      ];
+    } else if (params?.empCode) {
+      // Admin specific filter
+      where.employeeId = params.empCode;
+    }
+
+    if (params?.status) where.status = params.status;
+    if (params?.year && params?.quarter) {
+      const startDate = new Date(params.year, (params.quarter - 1) * 3, 1);
+      const endDate = new Date(params.year, params.quarter * 3, 0);
+      where.AND = [
+        { periodStart: { gte: startDate } },
+        { periodEnd: { lte: endDate } }
+      ];
+    }
+
+    // Filter out Assigned Drafts (Master Templates) if requested
+    // Logic: Admin sees all (except drafts if filtered), User sees only their scope
+    if (params?.excludeAssignedDrafts) {
+      // If NOT check for existing where.NOT, we might overwrite it.
+      // But currently 'where' is fresh.
+      where.NOT = {
+        AND: [
+          { isDraft: true },
+          { status: 'Assigned' }
+        ]
+      };
+    }
+
+    const [total, assessments] = await Promise.all([
+      prisma.assessment.count({ where }),
+      prisma.assessment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: skip,
+      })
+    ]);
+
+    const totalPages = Math.ceil(total / limit);
+
+    const serializedAssessments = assessments.map((assessment) => ({
+      id: assessment.id,
+      title: assessment.title || '',
+      description: assessment.description || undefined,
+      type: assessment.assessmentType as Assessment['type'], // Type Assertion
+      assessmentType: assessment.assessmentType as Assessment['assessmentType'],
+      status: assessment.status as Assessment['status'],
+      employeeId: assessment.employeeId,
+      assessorId: assessment.assessorId || '',
+      isDraft: assessment.isDraft,
+      targetLevel: assessment.targetLevel || undefined,
+      periodStart: assessment.periodStart.toISOString(),
+      periodEnd: assessment.periodEnd.toISOString(),
+      dueDate: assessment.dueDate?.toISOString() || '',
+      completedAt: assessment.completedAt?.toISOString() || undefined,
+      score: assessment.score || undefined,
+      finalScore: assessment.finalScore || undefined,
+      createdAt: assessment.createdAt.toISOString(),
+      updatedAt: assessment.updatedAt.toISOString(),
+      submittedAt: assessment.submittedAt?.toISOString() || undefined,
+      approvedAt: assessment.approvedAt?.toISOString() || undefined,
+    }));
+
+    return {
+      data: serializedAssessments,
+      metadata: {
+        total,
+        page,
+        limit,
+        totalPages
+      }
+    };
   } catch (error) {
     console.error('Error fetching assessments:', error);
     throw new Error('Failed to fetch assessments');
@@ -123,6 +252,7 @@ export async function getAssessment(id: string) {
         status: assessment.status,
         employeeId: assessment.employeeId,
         assessorId: assessment.assessorId || '',
+        isDraft: assessment.isDraft,
         targetLevel: assessment.targetLevel || undefined,
         currentStage: assessment.currentStage,
         periodStart: assessment.periodStart.toISOString(),
@@ -511,6 +641,21 @@ export async function createAssessmentDraft(data: {
     });
 
     revalidatePath('/dashboard/assessments');
+
+    // [AUDIT LOG]
+    await logAudit(
+      'ASSESSMENT_CREATE',
+      'Assessment',
+      assessment.id,
+      {
+        action: 'Draft Creation',
+        title: assessment.title,
+        type: assessment.assessmentType,
+        targetLevel: assessment.targetLevel,
+        creatorId: data.assessorId
+      }
+    );
+
     return { success: true, id: assessment.id };
   } catch (error) {
     console.error('Error creating assessment draft:', error);
@@ -606,7 +751,7 @@ export async function assignAssessmentToEmployees(assessmentId: string) {
 
     // [AUDIT LOG]
     await logAudit(
-      'ASSESSMENT_CREATE', // Using CREATE as it creates multiple assessments
+      'ASSESSMENT_ASSIGN', // Changed from CREATE to ASSIGN for clarity
       'Assessment',
       assessmentId,
       {
@@ -993,3 +1138,286 @@ export async function approveAssessment(
 }
 
 
+
+/**
+ * Submit full assessment (Consolidated Action)
+ * Saves comments, responses, and handles status transitions within a single transaction.
+ */
+export async function submitFullAssessment(payload: {
+  assessmentId: string;
+  responses: Array<{
+    questionId: string;
+    score?: number;
+    comment?: string;
+  }>;
+  comments: {
+    approver1Good?: string;
+    approver1Improve?: string;
+    approver2Good?: string;
+    approver2Improve?: string;
+    approver3Good?: string;
+    approver3Improve?: string;
+  };
+  managerData?: {
+    action: string;
+    reason: string;
+  };
+  hrData?: {
+    status: string;
+    note: string;
+  };
+  stage: 'self' | 'approver1' | 'approver2' | 'approver3' | 'manager' | 'hr' | 'md' | 'gm' | 'feedback';
+}) {
+  const { assessmentId, responses, comments, managerData, hrData, stage } = payload;
+
+  try {
+    const assessment = await prisma.assessment.findUnique({
+      where: { id: assessmentId },
+      include: { employee: true },
+    });
+
+    if (!assessment) {
+      return { success: false, error: 'Assessment not found' };
+    }
+
+    const employee = assessment.employee;
+
+    // determine next stage and update fields
+    let nextStage = assessment.status;
+    let nextPerson = assessment.currentStage;
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    // Update Comment Fields
+    if (stage === 'approver1') {
+      if (comments.approver1Good !== undefined) updateData.approver1Good = comments.approver1Good;
+      if (comments.approver1Improve !== undefined) updateData.approver1Improve = comments.approver1Improve;
+    }
+    if (stage === 'approver2') {
+      if (comments.approver2Good !== undefined) updateData.approver2Good = comments.approver2Good;
+      if (comments.approver2Improve !== undefined) updateData.approver2Improve = comments.approver2Improve;
+    }
+    if (stage === 'approver3') {
+      if (comments.approver3Good !== undefined) updateData.approver3Good = comments.approver3Good;
+      if (comments.approver3Improve !== undefined) updateData.approver3Improve = comments.approver3Improve;
+    }
+    if (stage === 'manager' && managerData) {
+      updateData.managerAction = managerData.action;
+      updateData.managerReason = managerData.reason;
+    }
+    if (stage === 'hr' && hrData) {
+      updateData.hrStatus = hrData.status;
+      updateData.hrNote = hrData.note;
+    }
+
+    // Determine Status Transitions
+    if (stage === 'self') {
+      // Logic for Employee Submission
+      const nextP = employee.approver1_ID || employee.manager_ID;
+      nextStage = employee.approver1_ID ? 'SUBMITTED_APPR1' : 'SUBMITTED_MGR';
+      nextPerson = nextP;
+      updateData.submittedAt = new Date();
+      updateData.approver1Status = employee.approver1_ID ? 'Pending' : undefined;
+    }
+    // Logic for Approvers (Similar to approveAssessment but inline)
+    else if (stage === 'approver1') {
+      updateData.approver1Status = 'Approved';
+      updateData.approver1Date = new Date();
+
+      if (employee.approver2_ID) {
+        nextStage = 'SUBMITTED_APPR2';
+        nextPerson = employee.approver2_ID;
+        updateData.approver2Status = 'Pending';
+      } else if (employee.approver3_ID) {
+        nextStage = 'SUBMITTED_APPR3';
+        nextPerson = employee.approver3_ID;
+        updateData.approver3Status = 'Pending';
+      } else if (employee.manager_ID) {
+        nextStage = 'SUBMITTED_MGR';
+        nextPerson = employee.manager_ID;
+        updateData.managerStatus = 'Pending';
+      } else {
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
+        nextPerson = null; // HR Queue
+      }
+    } else if (stage === 'approver2') {
+      updateData.approver2Status = 'Approved';
+      updateData.approver2Date = new Date();
+
+      if (employee.approver3_ID) {
+        nextStage = 'SUBMITTED_APPR3';
+        nextPerson = employee.approver3_ID;
+        updateData.approver3Status = 'Pending';
+      } else if (employee.manager_ID) {
+        nextStage = 'SUBMITTED_MGR';
+        nextPerson = employee.manager_ID;
+        updateData.managerStatus = 'Pending';
+      } else {
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
+        nextPerson = null;
+      }
+    } else if (stage === 'approver3') {
+      updateData.approver3Status = 'Approved';
+      updateData.approver3Date = new Date();
+
+      if (employee.manager_ID) {
+        nextStage = 'SUBMITTED_MGR';
+        nextPerson = employee.manager_ID;
+        updateData.managerStatus = 'Pending';
+      } else {
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
+        nextPerson = null;
+      }
+    } else if (stage === 'manager') {
+      updateData.managerStatus = 'Approved';
+      updateData.managerDate = new Date();
+      nextStage = 'SUBMITTED_HR';
+      updateData.hrStatus = 'Pending';
+      nextPerson = null;
+    } else if (stage === 'hr') {
+      updateData.hrStatus = 'Approved'; // Or whatever HR set
+      updateData.hrDate = new Date();
+
+      const mdSetting = await prisma.systemSetting.findUnique({ where: { key: 'md_code' } });
+      const mdId = mdSetting?.value;
+      if (mdId) {
+        nextStage = 'SUBMITTED_MD';
+        nextPerson = mdId;
+        updateData.mdStatus = 'Pending';
+      } else {
+        nextStage = 'FEEDBACK_REQUIRED';
+        nextPerson = employee.manager_ID;
+      }
+    } else if (stage === 'md') {
+      updateData.mdStatus = 'Approved';
+      updateData.mdDate = new Date();
+      nextStage = 'FEEDBACK_REQUIRED';
+      nextPerson = employee.manager_ID;
+    } else if (stage === 'feedback') {
+      updateData.feedbackDate = new Date();
+      if (employee.gm_ID) {
+        nextStage = 'SUBMITTED_GM';
+        nextPerson = employee.gm_ID;
+        updateData.gmStatus = 'Pending';
+      } else {
+        nextStage = 'COMPLETED';
+        updateData.completedAt = new Date();
+        nextPerson = null;
+      }
+    } else if (stage === 'gm') {
+      updateData.gmStatus = 'Approved';
+      updateData.gmDate = new Date();
+      nextStage = 'COMPLETED';
+      updateData.completedAt = new Date();
+      nextPerson = null;
+    }
+
+    updateData.status = nextStage;
+    updateData.currentStage = nextPerson;
+
+    // Execute Transaction
+    await prisma.$transaction(async (tx) => {
+      // 1. Save Responses
+      for (const resp of responses) {
+        const dataToSave: any = {};
+        // Assign score to correct field based on stage
+        if (stage === 'self') {
+          dataToSave.scoreSelf = resp.score;
+          dataToSave.commentSelf = resp.comment;
+        } else if (stage === 'approver1') {
+          dataToSave.scoreAppr1 = resp.score;
+        } else if (stage === 'approver2') {
+          dataToSave.scoreAppr2 = resp.score;
+        } else if (stage === 'approver3') {
+          dataToSave.scoreAppr3 = resp.score;
+        }
+
+        await tx.assessmentResponse.upsert({
+          where: {
+            assessmentId_questionId: {
+              assessmentId: assessmentId,
+              questionId: resp.questionId,
+            },
+          },
+          create: {
+            assessmentId: assessmentId,
+            questionId: resp.questionId,
+            // Fallback for missing titles if creating new (should usually exist)
+            questionTitle: 'Unknown',
+            questionWeight: 1,
+            ...dataToSave
+          },
+          update: dataToSave
+        });
+      }
+
+      // 2. Update Assessment Fields & Status
+      await tx.assessment.update({
+        where: { id: assessmentId },
+        data: updateData
+      });
+
+      // 3. Create Notification
+      if (nextPerson) {
+        await tx.notification.create({
+          data: {
+            userId: nextPerson,
+            type: 'ApprovalRequired',
+            title: 'Action Required: Assessment',
+            message: `Assessment for ${employee.empName_Eng} is waiting for your action.`,
+            assessmentId: assessmentId,
+            link: `/dashboard/assessments/${assessmentId}/approve`, // Simplified link
+          },
+        });
+      } else if (nextStage === 'COMPLETED') {
+        // Notify employee
+        await tx.notification.create({
+          data: {
+            userId: employee.empCode,
+            type: 'Approved',
+            title: 'Assessment Completed',
+            message: 'Your assessment has been completed.',
+            assessmentId: assessmentId,
+            link: `/dashboard/assessments/${assessmentId}/summary`,
+          },
+        });
+      }
+    });
+
+    revalidatePath('/dashboard/assessments');
+    revalidatePath(`/dashboard/assessments/${assessmentId}`);
+
+    // [AUDIT LOG] - Outside transaction to avoid blocking if audit fails (or could be inside)
+    // We already have logAudit helper, using it here.
+    let auditAction = 'ASSESSMENT_UPDATE';
+    if (stage === 'self') auditAction = 'ASSESSMENT_SUBMIT';
+    else if (stage === 'approver1') auditAction = 'ASSESSMENT_APPROVE_APPR1';
+    else if (stage === 'approver2') auditAction = 'ASSESSMENT_APPROVE_APPR2';
+    else if (stage === 'approver3') auditAction = 'ASSESSMENT_APPROVE_APPR3';
+    else if (stage === 'manager') auditAction = 'ASSESSMENT_APPROVE_MGR';
+    else if (stage === 'hr') auditAction = 'ASSESSMENT_REVIEW_HR';
+    else if (stage === 'md') auditAction = 'ASSESSMENT_REVIEW_MD';
+    else if (stage === 'gm') auditAction = 'ASSESSMENT_CONFIRM_GM';
+    else if (stage === 'feedback') auditAction = 'ASSESSMENT_FEEDBACK';
+
+    await logAudit(
+      auditAction as any,
+      'Assessment',
+      assessmentId,
+      {
+        stage: stage,
+        nextStage: nextStage,
+        nextPerson: nextPerson
+      }
+    );
+
+    return { success: true, message: 'Assessment submitted successfully' };
+  } catch (error) {
+    console.error('Error in submitFullAssessment:', error);
+    return { success: false, error: 'Failed to submit assessment' };
+  }
+}

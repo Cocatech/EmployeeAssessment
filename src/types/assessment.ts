@@ -61,6 +61,7 @@ export interface Assessment {
   status: AssessmentStatus;
   employeeId: string;
   assessorId: string;
+  isDraft: boolean; // Added to fixing type error
   targetLevel?: string; // from Prisma schema
   currentStage?: string;
   periodStart: string;

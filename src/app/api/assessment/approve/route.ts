@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateAssessment } from '@/actions/assessments';
 import { getAssessments } from '@/actions/assessments';
+import { logAudit, AuditAction } from '@/lib/audit'; // Import audit logger
 // Legacy route - use new workflow actions instead
 // import { calculateAssessmentScore } from '@/actions/responses';
 
@@ -95,6 +96,18 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date().toISOString(),
       });
 
+      // [AUDIT LOG]
+      await logAudit(
+        'ASSESSMENT_REJECT',
+        'Assessment',
+        assessmentId,
+        {
+          action: 'Reject',
+          previousStatus: assessment.status,
+          reason: 'Rejected via API'
+        }
+      );
+
       return NextResponse.json({
         success: true,
         message: 'Assessment rejected',
@@ -154,6 +167,28 @@ export async function POST(request: NextRequest) {
       // e.g., Set approvedByAppr1 = true, etc. based on currentStatus
 
       const updated = await updateAssessment(assessmentId, updateData);
+
+      // [AUDIT LOG] Determine specific action type based on status
+      let auditAction: AuditAction = 'ASSESSMENT_UPDATE';
+      if (currentStatus === 'SUBMITTED_APPR1') auditAction = 'ASSESSMENT_APPROVE_APPR1';
+      else if (currentStatus === 'SUBMITTED_APPR2') auditAction = 'ASSESSMENT_APPROVE_APPR2';
+      else if (currentStatus === 'SUBMITTED_APPR3') auditAction = 'ASSESSMENT_APPROVE_APPR3';
+      else if (currentStatus === 'SUBMITTED_MGR') auditAction = 'ASSESSMENT_APPROVE_MGR';
+      else if (currentStatus === 'SUBMITTED_HR') auditAction = 'ASSESSMENT_REVIEW_HR';
+      else if (currentStatus === 'SUBMITTED_MD') auditAction = 'ASSESSMENT_REVIEW_MD';
+      else if (currentStatus === 'FEEDBACK_REQUIRED') auditAction = 'ASSESSMENT_FEEDBACK';
+      else if (currentStatus === 'SUBMITTED_GM') auditAction = 'ASSESSMENT_CONFIRM_GM';
+
+      await logAudit(
+        auditAction,
+        'Assessment',
+        assessmentId,
+        {
+          previousStatus: currentStatus,
+          newStatus: nextStatus,
+          action: 'Approve/Confirm'
+        }
+      );
 
       return NextResponse.json({
         success: true,

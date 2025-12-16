@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ShieldAlert, Search, Filter } from 'lucide-react';
 import { getAuditLogs } from '@/actions/audit';
+import { PaginationControl } from '@/components/ui/pagination-control';
+
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,7 +27,7 @@ export const metadata = {
 export default async function AuditLogsPage({
     searchParams,
 }: {
-    searchParams: { q?: string; action?: string };
+    searchParams: { q?: string; action?: string; page?: string };
 }) {
     const session = await auth();
     if (!session?.user) redirect('/auth/signin');
@@ -36,9 +38,13 @@ export default async function AuditLogsPage({
     }
 
     const query = searchParams.q || '';
-    const logs = await getAuditLogs({
+    const page = Number(searchParams.page) || 1;
+    const limit = 20;
+
+    const { data: logs, metadata } = await getAuditLogs({
         search: query,
-        // limit: 200 
+        page,
+        limit
     });
 
     return (
@@ -141,6 +147,14 @@ export default async function AuditLogsPage({
                     </div>
                 </CardContent>
             </Card>
+
+
+            <PaginationControl
+                currentPage={metadata.page}
+                totalPages={metadata.totalPages}
+                baseUrl="/dashboard/audit"
+                searchParams={{ q: query }}
+            />
         </div>
     );
 }

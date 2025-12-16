@@ -45,6 +45,7 @@ export type AuditAction =
     | 'QUESTION_UPDATE'
     | 'QUESTION_DELETE'
     | 'ASSESSMENT_CREATE'
+    | 'ASSESSMENT_ASSIGN'
     | 'ASSESSMENT_DELETE';
 
 /**

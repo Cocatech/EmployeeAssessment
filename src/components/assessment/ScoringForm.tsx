@@ -310,21 +310,15 @@ export default function ScoringForm({
   };
 
 
+
   const handleSubmit = async () => {
     console.log('[DEBUG] handleSubmit called');
-    console.log('[DEBUG] responses:', Object.keys(responses).length, 'questions:', questions.length);
-    console.log('[DEBUG] isApprover1:', isApprover1, 'isApprover2:', isApprover2);
 
-    if (!validateResponses()) {
-      console.log('[DEBUG] validateResponses returned false');
-      return;
-    }
-    console.log('[DEBUG] validateResponses passed');
+    if (!validateResponses()) return;
 
     // Validate Comments for Approvers
     if (isApprover1 && (!comments.approver1Good || !comments.approver1Improve)) {
       setError('Please fill in Good Points and Points for Improvement.');
-      console.log('[DEBUG] Failed approver1 comment validation');
       return;
     }
     if (isApprover2 && (!comments.approver2Good || !comments.approver2Improve)) {
@@ -338,90 +332,63 @@ export default function ScoringForm({
     // Validate Manager Action
     if (isManager) {
       if (!managerData.action) {
-        setError('Please select an action (No Change, Promotion, etc.).');
+        setError('Please select an action.');
         return;
       }
       if ((managerData.action === 'DEMOTION' || managerData.action === 'TERMINATION') && !managerData.reason) {
-        setError('Please provide a reason for Demotion/Termination.');
+        setError('Please provide a reason.');
         return;
       }
     }
-
-    // Confirm dialog temporarily disabled for testing
-    // if (!confirm('Are you sure you want to submit? You will not be able to edit after submission.')) {
-    //   console.log('[DEBUG] User cancelled confirm dialog');
-    //   return;
-    // }
-    console.log('[DEBUG] Proceeding to submit (confirm disabled for testing)');
 
     setIsSubmitting(true);
     setError('');
 
     try {
-      await saveAssessmentFields(); // Save fields first
+      // Determine Stage
+      let stage: 'self' | 'approver1' | 'approver2' | 'approver3' | 'manager' | 'hr' | 'md' | 'gm' | 'feedback' = 'self';
+      if (isApprover1) stage = 'approver1';
+      else if (isApprover2) stage = 'approver2';
+      else if (isApprover3) stage = 'approver3';
+      else if (isManager) stage = 'manager';
+      else if (isHR) stage = 'hr';
+      else if (isMD) stage = 'md';
+      else if (isGM) stage = 'gm';
+      else if (isFeedback) stage = 'feedback';
 
-      // Build response data with the correct score field based on role
-      const responseData = Object.values(responses).map(resp => {
-        const data: any = {
-          assessmentId: assessment.id,
+      // Prepare Payload
+      const payload = {
+        assessmentId: assessment.id,
+        responses: Object.values(responses).map(resp => ({
           questionId: resp.questionId,
-        };
+          score: stage === 'self' ? resp.scoreSelf :
+            stage === 'approver1' ? resp.scoreAppr1 :
+              stage === 'approver2' ? resp.scoreAppr2 :
+                stage === 'approver3' ? resp.scoreAppr3 : undefined,
+          comment: stage === 'self' ? resp.commentSelf : undefined
+        })),
+        comments: {
+          approver1Good: comments.approver1Good,
+          approver1Improve: comments.approver1Improve,
+          approver2Good: comments.approver2Good,
+          approver2Improve: comments.approver2Improve,
+          approver3Good: comments.approver3Good,
+          approver3Improve: comments.approver3Improve,
+        },
+        managerData,
+        hrData,
+        stage: stage
+      };
 
-        // Include the appropriate score based on role
-        if (isApprover1) {
-          data.scoreAppr1 = resp.scoreAppr1;
-        } else if (isApprover2) {
-          data.scoreAppr2 = resp.scoreAppr2;
-        } else if (isApprover3) {
-          data.scoreAppr3 = resp.scoreAppr3;
-        } else {
-          // Self/Employee
-          data.scoreSelf = resp.scoreSelf;
-          data.commentSelf = resp.commentSelf || '';
-        }
+      // Call Server Action
+      const { submitFullAssessment } = await import('@/actions/assessments');
+      const result = await submitFullAssessment(payload);
 
-        return data;
-      });
-
-      // Save responses
-      await fetch('/api/assessment/save-responses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ responses: responseData }),
-      });
-
-      // Submit/Approve workflow
-      let endpoint = '/api/assessment/submit';
-      let payload: any = { assessmentId: assessment.id };
-
-      if (['SUBMITTED_APPR1', 'SUBMITTED_APPR2', 'SUBMITTED_APPR3', 'SUBMITTED_MGR', 'SUBMITTED_HR', 'SUBMITTED_MD', 'SUBMITTED_GM'].includes(assessment.status)) {
-        endpoint = '/api/assessment/approve';
-
-        // Determine stage for approval
-        let stage = 'approver1';
-        if (isApprover2) stage = 'approver2';
-        else if (isApprover3) stage = 'approver3';
-        else if (isManager) stage = 'manager';
-        else if (isHR) stage = 'hr';
-        else if (isMD) stage = 'md';
-        else if (isGM) stage = 'gm';
-        else if (isFeedback) stage = 'feedback';
-
-        payload = { assessmentId: assessment.id, action: 'approve', stage };
-      }
-
-      const submitResponse = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (submitResponse.ok) {
+      if (result.success) {
         router.push(`/dashboard/assessments/${assessment.id}?submitted=true`);
-        router.refresh();
+        router.refresh(); // Refresh to show updated status
       } else {
-        const errData = await submitResponse.json();
-        setError(errData.error || 'Failed to submit assessment');
+        setError(result.error || 'Failed to submit assessment');
       }
     } catch (err) {
       console.error(err);
@@ -430,6 +397,7 @@ export default function ScoringForm({
       setIsSubmitting(false);
     }
   };
+
 
   // Editable check
   const editableStatuses = ['DRAFT', 'ASSIGNED', 'IN_PROGRESS', 'INPROGRESS'];

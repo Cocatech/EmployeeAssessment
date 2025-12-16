@@ -5,7 +5,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install dependencies for building
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat tzdata
 
 # Copy package files
 COPY package.json package-lock.json* ./
@@ -19,6 +19,7 @@ COPY . .
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV TZ=Asia/Bangkok
 
 # Build the application
 RUN npm run build
@@ -35,6 +36,7 @@ RUN adduser --system --uid 1001 nextjs
 # Set environment variables
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV TZ=Asia/Bangkok
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 

@@ -14,6 +14,7 @@ export async function getAuditLogs(params?: {
     endDate?: string;
     search?: string;
     limit?: number;
+    page?: number;
 }) {
     try {
         // 1. Strict Authorization Check
@@ -43,18 +44,38 @@ export async function getAuditLogs(params?: {
             ];
         }
 
-        const logs = await prisma.auditLog.findMany({
-            where,
-            orderBy: { createdAt: 'desc' },
-            take: params?.limit || 100, // Default limit 100 to prevent overload
-        });
+        const page = params?.page || 1;
+        const limit = params?.limit || 20; // Default lower limit for pagination
+        const skip = (page - 1) * limit;
+
+        const [total, logs] = await Promise.all([
+            prisma.auditLog.count({ where }),
+            prisma.auditLog.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                take: limit,
+                skip: skip,
+            })
+        ]);
+
+        const totalPages = Math.ceil(total / limit);
 
         // Serialize dates for client component
-        return logs.map(log => ({
+        const serializedLogs = logs.map(log => ({
             ...log,
             createdAt: log.createdAt.toISOString(),
-            changes: log.changes ? JSON.stringify(log.changes) : null, // Flatten JSON for simpler table handling if needed, or keep as is
+            changes: log.changes ? JSON.stringify(log.changes) : null,
         }));
+
+        return {
+            data: serializedLogs,
+            metadata: {
+                total,
+                page,
+                limit,
+                totalPages
+            }
+        };
 
     } catch (error) {
         console.error('Error fetching audit logs:', error);
