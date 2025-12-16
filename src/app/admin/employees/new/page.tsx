@@ -24,7 +24,7 @@ export default async function NewEmployeePage() {
     const role = currentUser?.role;
     const userType = currentUser?.userType;
 
-    if (userType !== 'SYSTEM_ADMIN' && role !== 'ADMIN') {
+    if (userType !== 'SYSTEM_ADMIN' && role !== 'HR') {
         redirect('/dashboard');
     }
 

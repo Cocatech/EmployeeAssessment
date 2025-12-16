@@ -41,9 +41,7 @@ export function PositionManager({ positions }: PositionManagerProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this position?')) {
-      return;
-    }
+
 
     const result = await deletePosition(id);
     if (result.success) {

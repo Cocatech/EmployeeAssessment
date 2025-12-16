@@ -23,8 +23,8 @@ export default async function DelegationDetailPage({
   const currentUser = (session?.user as any);
   const role = currentUser?.role;
   const userType = currentUser?.userType;
-  
-  if (userType !== 'SYSTEM_ADMIN' && role !== 'ADMIN') {
+
+  if (userType !== 'SYSTEM_ADMIN' && role !== 'HR') {
     redirect('/dashboard');
   }
 
@@ -56,7 +56,7 @@ export default async function DelegationDetailPage({
     const now = new Date();
     const startDate = new Date(delegation.startDate);
     const endDate = new Date(delegation.endDate);
-    
+
     if (!delegation.isActive) {
       return (
         <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-gray-100 text-gray-800">
@@ -64,7 +64,7 @@ export default async function DelegationDetailPage({
         </span>
       );
     }
-    
+
     if (now < startDate) {
       return (
         <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-blue-100 text-blue-800">
@@ -72,7 +72,7 @@ export default async function DelegationDetailPage({
         </span>
       );
     }
-    
+
     if (now > endDate) {
       return (
         <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-red-100 text-red-800">
@@ -80,7 +80,7 @@ export default async function DelegationDetailPage({
         </span>
       );
     }
-    
+
     return (
       <span className="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium bg-green-100 text-green-800">
         Active

@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get a system setting by key
@@ -30,6 +31,8 @@ export async function updateSystemSetting(key: string, value: string, label?: st
     });
 
     revalidatePath('/admin/settings');
+    // [AUDIT LOG]
+    await logAudit('SETTING_UPDATE', 'SystemSetting', key, { value, label, type });
     return { success: true, data: setting };
   } catch (error) {
     console.error(`Error updating setting ${key}:`, error);
@@ -166,8 +169,12 @@ export async function getPositions() {
 
 export async function createPosition(data: any) {
   try {
-    await prisma.position.create({ data });
+    const result = await prisma.position.create({ data });
     revalidatePath('/dashboard/settings/positions');
+
+    // [AUDIT LOG]
+    await logAudit('POSITION_CREATE', 'Position', result.id, { data });
+
     return { success: true };
   } catch (error) {
     console.error('Error creating position:', error);
@@ -179,6 +186,10 @@ export async function updatePosition(id: string, data: any) {
   try {
     await prisma.position.update({ where: { id }, data });
     revalidatePath('/dashboard/settings/positions');
+
+    // [AUDIT LOG]
+    await logAudit('POSITION_UPDATE', 'Position', id, { data });
+
     return { success: true };
   } catch (error) {
     console.error('Error updating position:', error);
@@ -188,8 +199,15 @@ export async function updatePosition(id: string, data: any) {
 
 export async function deletePosition(id: string) {
   try {
+    // [AUDIT LOG] Fetch for name before delete?
+    const target = await prisma.position.findUnique({ where: { id } });
+
     await prisma.position.delete({ where: { id } });
     revalidatePath('/dashboard/settings/positions');
+
+    // [AUDIT LOG]
+    if (target) await logAudit('POSITION_DELETE', 'Position', id, { name: target.name });
+
     return { success: true };
   } catch (error) {
     console.error('Error deleting position:', error);
@@ -231,8 +249,12 @@ export async function getGroups() {
 
 export async function createGroup(data: any) {
   try {
-    await prisma.group.create({ data });
-    revalidatePath('/dashboard/settings/organization'); // Assuming page path
+    const result = await prisma.group.create({ data });
+    revalidatePath('/dashboard/settings/organization');
+
+    // [AUDIT LOG]
+    await logAudit('GROUP_CREATE', 'Group', result.id, { data });
+
     return { success: true };
   } catch (error) {
     console.error('Error creating group:', error);
@@ -244,6 +266,10 @@ export async function updateGroup(id: string, data: any) {
   try {
     await prisma.group.update({ where: { id }, data });
     revalidatePath('/dashboard/settings/organization');
+
+    // [AUDIT LOG]
+    await logAudit('GROUP_UPDATE', 'Group', id, { data });
+
     return { success: true };
   } catch (error) {
     console.error('Error updating group:', error);
@@ -253,8 +279,14 @@ export async function updateGroup(id: string, data: any) {
 
 export async function deleteGroup(id: string) {
   try {
+    const target = await prisma.group.findUnique({ where: { id } });
+
     await prisma.group.delete({ where: { id } });
     revalidatePath('/dashboard/settings/organization');
+
+    // [AUDIT LOG]
+    if (target) await logAudit('GROUP_DELETE', 'Group', id, { name: target.name });
+
     return { success: true };
   } catch (error) {
     console.error('Error deleting group:', error);
@@ -296,8 +328,12 @@ export async function getTeams() {
 
 export async function createTeam(data: any) {
   try {
-    await prisma.team.create({ data });
+    const result = await prisma.team.create({ data });
     revalidatePath('/dashboard/settings/organization');
+
+    // [AUDIT LOG]
+    await logAudit('TEAM_CREATE', 'Team', result.id, { data });
+
     return { success: true };
   } catch (error) {
     console.error('Error creating team:', error);
@@ -309,6 +345,10 @@ export async function updateTeam(id: string, data: any) {
   try {
     await prisma.team.update({ where: { id }, data });
     revalidatePath('/dashboard/settings/organization');
+
+    // [AUDIT LOG]
+    await logAudit('TEAM_UPDATE', 'Team', id, { data });
+
     return { success: true };
   } catch (error) {
     console.error('Error updating team:', error);
@@ -318,8 +358,14 @@ export async function updateTeam(id: string, data: any) {
 
 export async function deleteTeam(id: string) {
   try {
+    const target = await prisma.team.findUnique({ where: { id } });
+
     await prisma.team.delete({ where: { id } });
     revalidatePath('/dashboard/settings/organization');
+
+    // [AUDIT LOG]
+    if (target) await logAudit('TEAM_DELETE', 'Team', id, { name: target.name });
+
     return { success: true };
   } catch (error) {
     console.error('Error deleting team:', error);
@@ -361,8 +407,12 @@ export async function getAssessmentTypes() {
 
 export async function createAssessmentType(data: any) {
   try {
-    await prisma.assessmentType.create({ data });
+    const result = await prisma.assessmentType.create({ data });
     revalidatePath('/dashboard/settings/assessments');
+
+    // [AUDIT LOG]
+    await logAudit('SETTING_UPDATE', 'AssessmentType', result.id, { action: 'CREATE', data });
+
     return { success: true };
   } catch (error) {
     console.error('Error creating assessment type:', error);
@@ -374,6 +424,10 @@ export async function updateAssessmentType(id: string, data: any) {
   try {
     await prisma.assessmentType.update({ where: { id }, data });
     revalidatePath('/dashboard/settings/assessments');
+
+    // [AUDIT LOG]
+    await logAudit('SETTING_UPDATE', 'AssessmentType', id, { action: 'UPDATE', data });
+
     return { success: true };
   } catch (error) {
     console.error('Error updating assessment type:', error);
@@ -383,8 +437,14 @@ export async function updateAssessmentType(id: string, data: any) {
 
 export async function deleteAssessmentType(id: string) {
   try {
+    const target = await prisma.assessmentType.findUnique({ where: { id } });
+
     await prisma.assessmentType.delete({ where: { id } });
     revalidatePath('/dashboard/settings/assessments');
+
+    // [AUDIT LOG]
+    if (target) await logAudit('SETTING_UPDATE', 'AssessmentType', id, { action: 'DELETE', name: target.name });
+
     return { success: true };
   } catch (error) {
     console.error('Error deleting assessment type:', error);

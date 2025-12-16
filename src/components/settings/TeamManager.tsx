@@ -43,9 +43,7 @@ export function TeamManager({ teams, groups }: TeamManagerProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this team?')) {
-      return;
-    }
+
 
     const result = await deleteTeam(id);
     if (result.success) {

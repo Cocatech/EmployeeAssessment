@@ -13,8 +13,8 @@ export async function isSystemAdmin(): Promise<boolean> {
   const currentUser = session.user as any;
   const role = currentUser?.role;
   const userType = currentUser?.userType;
-  
-  return userType === 'SYSTEM_ADMIN' || role === 'ADMIN';
+
+  return userType === 'SYSTEM_ADMIN' || role === 'HR';
 }
 
 /**
@@ -41,7 +41,7 @@ export async function isAdminOrHR(): Promise<boolean> {
   const session = await auth();
   if (!session?.user) return false;
 
-  // Check if System Admin or Employee Admin
+  // Check if System Admin or Employee Admin (HR)
   if (await isSystemAdmin()) return true;
 
   const empCode = (session.user as any)?.empCode;
@@ -50,6 +50,7 @@ export async function isAdminOrHR(): Promise<boolean> {
   // Check if HR
   const employees = await getEmployees();
   const currentUser = employees.find(emp => emp.empCode === empCode);
+  // Keep looser check for grouping logic if needed, but primary role is now HR
   const isHR = currentUser?.group?.includes('HR') || currentUser?.group?.includes('ADM');
 
   return !!isHR;
@@ -92,7 +93,7 @@ export async function getCurrentUserPermissions(): Promise<{
   canManageQuestions: boolean;
 }> {
   const session = await auth();
-  
+
   if (!session?.user) {
     return {
       empCode: '',
@@ -119,7 +120,7 @@ export async function getCurrentUserPermissions(): Promise<{
       canManageQuestions: true,
     };
   }
-  
+
   if (!empCode) {
     return {
       empCode: '',

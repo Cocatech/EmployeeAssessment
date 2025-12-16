@@ -28,7 +28,7 @@ export default async function DashboardAssessmentsPage() {
 
   // Check if user has permission to create assessments
   // Only allow: System Admin or Employee Admin
-  const isAdmin = userType === 'SYSTEM_ADMIN' || role === 'ADMIN';
+  const isAdmin = userType === 'SYSTEM_ADMIN' || role === 'HR';
 
   // Only Admin can create assessments
   const canCreateAssessment = isAdmin;

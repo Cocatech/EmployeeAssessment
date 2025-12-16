@@ -34,7 +34,7 @@ export default async function EditEmployeePage({
   const userType = currentUser?.userType;
 
   // Only System Admin or Employee Admin can access
-  if (userType !== 'SYSTEM_ADMIN' && role !== 'ADMIN') {
+  if (userType !== 'SYSTEM_ADMIN' && role !== 'HR') {
     redirect('/dashboard');
   }
 

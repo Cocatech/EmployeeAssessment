@@ -15,14 +15,14 @@ export default async function NewDelegationPage() {
   const role = currentUser?.role;
   const userType = currentUser?.userType;
   const empCode = currentUser?.empCode;
-  
-  if (userType !== 'SYSTEM_ADMIN' && role !== 'ADMIN') {
+
+  if (userType !== 'SYSTEM_ADMIN' && role !== 'HR') {
     redirect('/dashboard');
   }
 
   // Get all employees
   const employees = await getEmployees();
-  
+
   // Filter out admin user
   const availableEmployees = employees.filter(emp => emp.empCode !== 'EMP999');
 

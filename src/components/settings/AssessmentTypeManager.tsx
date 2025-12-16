@@ -41,9 +41,7 @@ export function AssessmentTypeManager({ assessmentTypes }: AssessmentTypeManager
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this assessment type?')) {
-      return;
-    }
+
 
     const result = await deleteAssessmentType(id);
     if (result.success) {

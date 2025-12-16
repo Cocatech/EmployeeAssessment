@@ -17,6 +17,7 @@ import {
   Calendar,
   User
 } from 'lucide-react';
+import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog';
 
 interface EmployeeTableProps {
   employees: Employee[];
@@ -28,10 +29,6 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (empCode: string) => {
-    if (!confirm(`Are you sure you want to delete employee ${empCode}?`)) {
-      return;
-    }
-
     setDeletingId(empCode);
     const result = await deleteEmployee(empCode);
     setDeletingId(null);
@@ -119,14 +116,14 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
                         <Edit className="h-4 w-4" />
                       </Button>
                     </Link>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(employee.empCode)}
-                      disabled={deletingId === employee.empCode}
-                    >
-                      <Trash2 className="h-4 w-4 text-red-600" />
-                    </Button>
+                    <DeleteConfirmationDialog
+                      title="Delete Employee?"
+                      itemIdentifier={`${employee.empCode} - ${employee.empName_Eng}`}
+                      description="This will permanently delete the employee. This action cannot be undone."
+                      onConfirm={() => handleDelete(employee.empCode)}
+                      variant="icon"
+                      deleteKeyword="DELETE"
+                    />
                   </div>
                 </td>
               </tr>
@@ -211,14 +208,22 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
                   Edit
                 </Button>
               </Link>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleDelete(employee.empCode)}
-                disabled={deletingId === employee.empCode}
-              >
-                <Trash2 className="h-4 w-4 text-red-600" />
-              </Button>
+              <DeleteConfirmationDialog
+                title="Delete Employee?"
+                itemIdentifier={`${employee.empCode} - ${employee.empName_Eng}`}
+                description="This will permanently delete the employee and their assessment data. This action cannot be undone."
+                onConfirm={() => handleDelete(employee.empCode)}
+                deleteKeyword="DELETE"
+                trigger={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={deletingId === employee.empCode}
+                  >
+                    <Trash2 className="h-4 w-4 text-red-600" />
+                  </Button>
+                }
+              />
             </div>
           </div>
         ))}

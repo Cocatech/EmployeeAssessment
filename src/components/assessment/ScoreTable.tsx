@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 interface ScoreTableProps {
   items: KPIItem[];
-  role: 'EMPLOYEE' | 'MANAGER' | 'APPROVER2' | 'GM' | 'ADMIN';
+  role: 'EMPLOYEE' | 'MANAGER' | 'APPROVER2' | 'GM' | 'HR';
   status: string;
   register: UseFormRegister<any>;
   readonly?: boolean;

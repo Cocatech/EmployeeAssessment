@@ -3,6 +3,7 @@
 import { prisma, findQuestionsByLevel, findQuestionsByCategory } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { AssessmentQuestion } from '@/types/assessment';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get all questions with optional filters
@@ -227,6 +228,14 @@ export async function createQuestion(data: Omit<AssessmentQuestion, 'id' | 'crea
 
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
+
+    // [AUDIT LOG]
+    await logAudit('QUESTION_CREATE', 'AssessmentQuestion', result.id, {
+      title: data.questionTitle,
+      category: data.category,
+      level: data.applicableLevel
+    });
+
     return { success: true, id: result.id };
   } catch (error) {
     console.error('Error creating question:', error);
@@ -265,6 +274,10 @@ export async function updateQuestion(id: string, data: Partial<AssessmentQuestio
 
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
+
+    // [AUDIT LOG]
+    await logAudit('QUESTION_UPDATE', 'AssessmentQuestion', id, { changes: Object.keys(data).join(', ') });
+
     return { success: true };
   } catch (error) {
     console.error('Error updating question:', error);
@@ -277,12 +290,18 @@ export async function updateQuestion(id: string, data: Partial<AssessmentQuestio
  */
 export async function deleteQuestion(id: string) {
   try {
+    const target = await prisma.assessmentQuestion.findUnique({ where: { id } });
+
     await prisma.assessmentQuestion.delete({
       where: { id },
     });
 
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
+
+    // [AUDIT LOG]
+    if (target) await logAudit('QUESTION_DELETE', 'AssessmentQuestion', id, { title: target.questionTitle });
+
     return { success: true };
   } catch (error) {
     console.error('Error deleting question:', error);
@@ -304,6 +323,10 @@ export async function deleteQuestions(ids: string[]) {
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
     revalidatePath('/dashboard/settings/assessment-questions');
+
+    // [AUDIT LOG]
+    await logAudit('QUESTION_DELETE', 'AssessmentQuestion', 'BULK', { count: result.count, ids });
+
     return { success: true, count: result.count };
   } catch (error) {
     console.error('Error deleting questions:', error);
@@ -335,6 +358,10 @@ export async function toggleQuestionStatus(id: string) {
 
     revalidatePath('/admin/questions');
     revalidatePath('/dashboard/questions');
+
+    // [AUDIT LOG]
+    await logAudit('QUESTION_UPDATE', 'AssessmentQuestion', id, { isActive: !question.isActive });
+
     return { success: true };
   } catch (error) {
     console.error('Error toggling question status:', error);

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
 import { ASSESSMENT_LEVELS } from '@/lib/assessment-levels';
+import { logAudit } from '@/lib/audit';
 
 async function getCurrentUser() {
     const session = await auth();
@@ -46,12 +47,11 @@ export async function createAssessmentLevel(data: {
 }): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        // TODO: restore admin check
-        // if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
-        //   return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+            return { success: false, error: 'Unauthorized' };
+        }
 
-        await prisma.assessmentLevel.create({
+        const result = await prisma.assessmentLevel.create({
             data: {
                 ...data,
                 isActive: true,
@@ -59,6 +59,10 @@ export async function createAssessmentLevel(data: {
         });
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        await logAudit('LEVEL_CREATE', 'AssessmentLevel', result.id, { name: data.name, code: data.code });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to create assessment level:', error);
@@ -85,10 +89,9 @@ export async function updateAssessmentLevel(
 ): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        // TODO: restore admin check
-        // if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
-        //   return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+            return { success: false, error: 'Unauthorized' };
+        }
 
         const currentLevel = await prisma.assessmentLevel.findUnique({
             where: { id },
@@ -125,6 +128,10 @@ export async function updateAssessmentLevel(
         }
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        await logAudit('LEVEL_UPDATE', 'AssessmentLevel', id, { changes: data });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to update assessment level:', error);
@@ -135,16 +142,21 @@ export async function updateAssessmentLevel(
 export async function deleteAssessmentLevel(id: string): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        // TODO: restore admin check
-        // if (!user || user.role !== 'ADMIN') { // Only Admin can delete
-        //   return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR')) { // Only Admin/HR can delete
+            return { success: false, error: 'Unauthorized' };
+        }
+
+        const target = await prisma.assessmentLevel.findUnique({ where: { id } });
 
         await prisma.assessmentLevel.delete({
             where: { id },
         });
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        if (target) await logAudit('LEVEL_DELETE', 'AssessmentLevel', id, { name: target.name, code: target.code });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to delete assessment level:', error);
@@ -155,9 +167,9 @@ export async function deleteAssessmentLevel(id: string): Promise<AssessmentLevel
 export async function toggleAssessmentLevelStatus(id: string, isActive: boolean): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        // if (!user || user.role !== 'ADMIN') {
-        //     return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR')) {
+            return { success: false, error: 'Unauthorized' };
+        }
 
         await prisma.assessmentLevel.update({
             where: { id },
@@ -165,6 +177,10 @@ export async function toggleAssessmentLevelStatus(id: string, isActive: boolean)
         });
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        await logAudit('LEVEL_UPDATE', 'AssessmentLevel', id, { isActive });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to toggle assessment level status:', error);

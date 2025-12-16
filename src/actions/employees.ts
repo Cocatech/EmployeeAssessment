@@ -3,6 +3,7 @@
 import { prisma, findEmployeeByCode, findActiveEmployees } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import type { Employee } from '@/types';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get all employees with optional filters
@@ -23,6 +24,21 @@ export async function getEmployees(params?: {
         { empName_Eng: { contains: params.search, mode: 'insensitive' } },
         { empName_Thai: { contains: params.search, mode: 'insensitive' } },
       ];
+    }
+
+    // [SECURITY] Hide SYSADMIN from non-SYSADMIN users
+    const session = await import('@/lib/auth').then(m => m.auth());
+    const currentUser = session?.user as any;
+    const isSysAdmin = currentUser?.userType === 'SYSTEM_ADMIN';
+
+    // IF NOT SYSADMIN -> Do not show users with userType='SYSTEM_ADMIN'
+    // AND Exclude specific SYSADMIN codes if known (like '99999', 'DEV') just in case
+    if (!isSysAdmin) {
+      where.user = {
+        userType: { not: 'SYSTEM_ADMIN' }
+      };
+      // Also robust safety check: exclude common dev codes if standardized
+      where.empCode = { notIn: ['DEV', 'ROOT', 'SYSADMIN'] };
     }
 
     const employees = await prisma.employee.findMany({
@@ -201,6 +217,21 @@ export async function createEmployee(data: Omit<Employee, 'empCode'> & {
   userType?: string;
 }) {
   try {
+    // 0. [SECURITY] Check Creator Permissions
+    const session = await import('@/lib/auth').then(m => m.auth());
+    const currentUser = session?.user as any;
+    const isSysAdmin = currentUser?.userType === 'SYSTEM_ADMIN';
+
+    if (!isSysAdmin) {
+      // Force defaults for HR
+      if (data.userType && data.userType !== 'EMPLOYEE') {
+        return { success: false, error: 'Unauthorized: Cannot create special User Type.' };
+      }
+      if (data.userRole && !['EMPLOYEE', 'MANAGER'].includes(data.userRole)) {
+        return { success: false, error: 'Unauthorized: Invalid Role assignment.' };
+      }
+    }
+
     // 1. Check if Employee already exists (Active or Inactive)
     const existingEmployee = await prisma.employee.findUnique({
       where: { empCode: data.empCode },
@@ -349,6 +380,14 @@ export async function createEmployee(data: Omit<Employee, 'empCode'> & {
 
     revalidatePath('/admin/employees');
     revalidatePath('/dashboard/employees');
+
+    // [AUDIT LOG]
+    await logAudit('EMPLOYEE_CREATE', 'Employee', data.empCode, {
+      name: data.empName_Eng,
+      position: data.position,
+      group: data.group
+    });
+
     return { success: true, id: result.id };
   } catch (error: any) {
     console.error('Error creating employee:', error);
@@ -371,6 +410,26 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
     }
 
     const updateData: any = {};
+
+    // [SECURITY] Check Permissions
+    const session = await import('@/lib/auth').then(m => m.auth());
+    const currentUser = session?.user as any;
+    const isSysAdmin = currentUser?.userType === 'SYSTEM_ADMIN';
+
+    // Check if target is SYSADMIN
+    const targetUser = await prisma.user.findFirst({ where: { empCode } });
+
+    if (targetUser?.userType === 'SYSTEM_ADMIN' && !isSysAdmin) {
+      return { success: false, error: 'Unauthorized: Cannot modify System Admin profile' };
+    }
+
+    // [SECURITY] Immutable Fields for Active Users (HR cannot change email/empCode of active users)
+    const isActiveUser = targetUser && targetUser.isActive;
+    if (isActiveUser && !isSysAdmin) {
+      if (data.email && data.email !== targetUser.email) {
+        return { success: false, error: 'Security: Cannot change email of active user. Ask System Admin.' };
+      }
+    }
 
     if (data.empName_Eng !== undefined) updateData.empName_Eng = data.empName_Eng;
     if (data.empName_Thai !== undefined) updateData.empName_Thai = data.empName_Thai || null;
@@ -427,6 +486,12 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
 
     revalidatePath('/admin/employees');
     revalidatePath('/dashboard/employees');
+
+    // [AUDIT LOG]
+    await logAudit('EMPLOYEE_UPDATE', 'Employee', empCode, {
+      changes: Object.keys(data).join(', ')
+    });
+
     return { success: true };
   } catch (error: any) {
     console.error('Error updating employee:', error);
@@ -469,6 +534,12 @@ export async function deleteEmployee(empCode: string) {
 
     revalidatePath('/admin/employees');
     revalidatePath('/dashboard/employees');
+
+    // [AUDIT LOG]
+    await logAudit('EMPLOYEE_DELETE', 'Employee', empCode, {
+      name: employee.empName_Eng
+    });
+
     return { success: true };
   } catch (error) {
     console.error('Error deleting employee:', error);

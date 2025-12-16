@@ -24,6 +24,7 @@ import {
 } from '@/actions/categories';
 import { Edit2, Trash2, Plus, Power } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog';
 
 type SerializedAssessmentCategory = Omit<AssessmentCategory, 'createdAt' | 'updatedAt'> & {
     createdAt: string;
@@ -129,37 +130,33 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
         })
     }
 
-    // Clear All Logic
-    const handleClearAllClick = () => {
-        setDeleteConfirmText("");
-        setIsClearDialogOpen(true);
-    }
 
-    const handleConfirmClear = async () => {
-        if (deleteConfirmText !== "DELETE") return;
-
-        setIsDeleting(true);
-        const ids = categories.map(c => c.id);
-        const result = await deleteAssessmentCategories(ids);
-
-        setIsDeleting(false);
-        setIsClearDialogOpen(false);
-
-        if (result.success) {
-            router.refresh();
-        } else {
-            alert(result.error);
-        }
-    }
 
     return (
         <div className="space-y-4">
             <div className="flex justify-between items-center">
                 <h3 className="text-lg font-medium">Assessment Categories</h3>
                 <div className="space-x-2">
-                    <Button variant="destructive" onClick={handleClearAllClick} disabled={categories.length === 0}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Clear All
-                    </Button>
+                    <DeleteConfirmationDialog
+                        trigger={
+                            <Button variant="destructive" disabled={categories.length === 0}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Clear All
+                            </Button>
+                        }
+                        title="Clear All Categories?"
+                        description={`This will permanently delete ${categories.length} categories. This action cannot be undone. Categories used in questions will not be deleted.`}
+                        onConfirm={async () => {
+                            const ids = categories.map(c => c.id);
+                            const result = await deleteAssessmentCategories(ids);
+                            if (result.success) {
+                                router.refresh();
+                            } else {
+                                alert(result.error);
+                            }
+                        }}
+                        deleteKeyword="DELETE"
+                        variant="button"
+                    />
                     <Button onClick={() => handleOpenDialog()}>
                         <Plus className="w-4 h-4 mr-2" />
                         Add Category
@@ -201,9 +198,14 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                                     <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(cat)}>
                                         <Edit2 className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(cat.id)}>
-                                        <Trash2 className="w-4 h-4 text-red-500" />
-                                    </Button>
+                                    <DeleteConfirmationDialog
+                                        title="Delete Category?"
+                                        itemIdentifier={cat.name}
+                                        onConfirm={() => handleDelete(cat.id)}
+                                        description="Deleting a category might affect questions assigned to it. This action cannot be undone."
+                                        variant="icon"
+                                        deleteKeyword="DELETE"
+                                    />
                                 </TableCell>
                             </TableRow>
                         ))}
@@ -301,37 +303,7 @@ export function CategoryManager({ initialCategories }: CategoryManagerProps) {
                 </DialogContent>
             </Dialog>
 
-            {/* Clear All Dialog */}
-            <Dialog open={isClearDialogOpen} onOpenChange={setIsClearDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Clear All Categories?</DialogTitle>
-                        <DialogDescription>
-                            This will permanently delete {categories.length} categories.
-                            This action cannot be undone. Categories used in questions will not be deleted.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4 space-y-4">
-                        <p className="text-sm text-slate-600">Type <span className="font-bold text-red-600">DELETE</span> to confirm.</p>
-                        <Input
-                            value={deleteConfirmText}
-                            onChange={(e) => setDeleteConfirmText(e.target.value)}
-                            placeholder="Type DELETE"
-                            className="font-mono"
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsClearDialogOpen(false)} disabled={isDeleting}>Cancel</Button>
-                        <Button
-                            variant="destructive"
-                            onClick={handleConfirmClear}
-                            disabled={deleteConfirmText !== "DELETE" || isDeleting}
-                        >
-                            {isDeleting ? "Deleting..." : "Delete All"}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+
         </div>
     );
 }

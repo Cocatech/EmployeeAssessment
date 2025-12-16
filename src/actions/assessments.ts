@@ -4,6 +4,7 @@ import { prisma, findAssessmentById, findAssessmentsByEmployee, findAssessmentsB
 import { revalidatePath } from 'next/cache';
 import type { Assessment } from '@/types';
 import { getMDConfig } from './settings';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get all assessments with optional filters
@@ -196,6 +197,19 @@ export async function createAssessment(data: Omit<Assessment, 'id' | 'createdAt'
 
     revalidatePath('/dashboard/assessments');
     revalidatePath('/admin/assessments');
+
+    // [AUDIT LOG]
+    await logAudit(
+      'ASSESSMENT_CREATE',
+      'Assessment',
+      result.id,
+      {
+        title: result.title,
+        type: result.assessmentType,
+        target: result.employeeId
+      }
+    );
+
     return { success: true, id: result.id };
   } catch (error) {
     console.error('Error creating assessment:', error);
@@ -294,6 +308,25 @@ export async function updateAssessment(id: string, data: Partial<Assessment>) {
  */
 export async function deleteAssessment(id: string) {
   try {
+    // [AUDIT LOG] Fetch details before delete
+    const assessmentToRemove = await prisma.assessment.findUnique({
+      where: { id },
+      select: { title: true, employeeId: true, status: true }
+    });
+
+    if (assessmentToRemove) {
+      await logAudit(
+        'ASSESSMENT_DELETE',
+        'Assessment',
+        id,
+        {
+          title: assessmentToRemove.title,
+          ownerId: assessmentToRemove.employeeId,
+          lastStatus: assessmentToRemove.status
+        }
+      );
+    }
+
     // Delete related notifications first (since they are loose coupled)
     await prisma.notification.deleteMany({
       where: { assessmentId: id }
@@ -570,6 +603,20 @@ export async function assignAssessmentToEmployees(assessmentId: string) {
     });
 
     revalidatePath('/dashboard/assessments');
+
+    // [AUDIT LOG]
+    await logAudit(
+      'ASSESSMENT_CREATE', // Using CREATE as it creates multiple assessments
+      'Assessment',
+      assessmentId,
+      {
+        action: 'Bulk Assignment',
+        draftTitle: draft.title,
+        targetLevel: draft.targetLevel,
+        count: result.length
+      }
+    );
+
     return {
       success: true,
       count: result.length,
@@ -658,6 +705,18 @@ export async function submitSelfAssessment(assessmentId: string, responses: any[
       });
     }
 
+    // [AUDIT LOG]
+    await logAudit(
+      'ASSESSMENT_SUBMIT',
+      'Assessment',
+      assessmentId,
+      {
+        status: nextStage,
+        nextStage: nextStage,
+        nextPerson: nextPerson
+      }
+    );
+
     revalidatePath('/dashboard/assessments');
     revalidatePath(`/dashboard/assessments/${assessmentId}`);
 
@@ -691,6 +750,17 @@ export async function rejectAssessment(assessmentId: string, note?: string) {
         currentStage: assessment.employeeId,
       },
     });
+
+    // [AUDIT LOG]
+    await logAudit(
+      'ASSESSMENT_REJECT',
+      'Assessment',
+      assessmentId,
+      {
+        reason: note,
+        rejectedFromStage: assessment.status
+      }
+    );
 
     revalidatePath(`/dashboard/assessments/${assessmentId}`);
     return { success: true };
@@ -777,7 +847,8 @@ export async function approveAssessment(
       updateData.approver3Date = new Date();
       updateData.approver3Note = note;
 
-      // Check if Manager exists
+      // Check if Manager exists and is not the same person as Approver 3 (optional optimization, but strict flow prefers explicit steps)
+      // For now, we enforce the step if manager_ID is present to ensure the "Manager" role sign-off is recorded specifically.
       if (employee.manager_ID) {
         nextStage = 'SUBMITTED_MGR';
         nextPerson = employee.manager_ID;
@@ -832,9 +903,15 @@ export async function approveAssessment(
       updateData.feedbackDate = new Date();
 
       // Go to GM
-      nextStage = 'SUBMITTED_GM';
-      nextPerson = employee.gm_ID;
-      updateData.gmStatus = 'Pending';
+      if (employee.gm_ID) {
+        nextStage = 'SUBMITTED_GM';
+        nextPerson = employee.gm_ID;
+        updateData.gmStatus = 'Pending';
+      } else {
+        // No GM - Complete assessment
+        nextStage = 'COMPLETED';
+        updateData.completedAt = new Date();
+      }
 
     } else if (stage === 'gm') {
       updateData.gmStatus = 'Approved';
@@ -855,6 +932,29 @@ export async function approveAssessment(
       where: { id: assessmentId },
       data: updateData,
     });
+
+    // [AUDIT LOG]
+    let auditAction = 'ASSESSMENT_UPDATE';
+    if (stage === 'approver1') auditAction = 'ASSESSMENT_APPROVE_APPR1';
+    else if (stage === 'approver2') auditAction = 'ASSESSMENT_APPROVE_APPR2';
+    else if (stage === 'approver3') auditAction = 'ASSESSMENT_APPROVE_APPR3';
+    else if (stage === 'manager') auditAction = 'ASSESSMENT_APPROVE_MGR';
+    else if (stage === 'hr') auditAction = 'ASSESSMENT_REVIEW_HR';
+    else if (stage === 'md') auditAction = 'ASSESSMENT_REVIEW_MD';
+    else if (stage === 'feedback') auditAction = 'ASSESSMENT_FEEDBACK';
+    else if (stage === 'gm') auditAction = 'ASSESSMENT_CONFIRM_GM';
+
+    await logAudit(
+      auditAction as any,
+      'Assessment',
+      assessmentId,
+      {
+        stage: stage,
+        status: nextStage,
+        note: note,
+        nextPerson: nextPerson
+      }
+    );
 
     // Create notification for next person or employee if completed
     if (nextPerson) {

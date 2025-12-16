@@ -18,19 +18,23 @@ export default async function SettingsPage() {
     redirect('/auth/signin');
   }
 
-  // Only System Admin can access settings
-  if (!await isSystemAdmin()) {
+  // Check Permissions: System Admin OR HR/Employee Admin
+  const isSysAdmin = await isSystemAdmin();
+  const isAdminOrHr = await import('@/lib/permissions').then(m => m.isAdminOrHR());
+
+  if (!isSysAdmin && !isAdminOrHr) {
     redirect('/dashboard');
   }
 
   const settingsCards = [
-    {
+    // General Settings - RESTRICTED TO SYSTEM ADMIN ONLY
+    ...(isSysAdmin ? [{
       title: 'General / Branding',
       description: 'System logos, company name, and appearance',
       icon: Grip,
       href: '/dashboard/settings/general',
       color: 'bg-indigo-500',
-    },
+    }] : []),
     {
       title: 'Positions',
       description: 'Manage employee positions and job titles',

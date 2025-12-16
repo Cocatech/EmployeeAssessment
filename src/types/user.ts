@@ -48,6 +48,6 @@ export interface Employee {
  */
 export interface ExtendedUser extends User {
   empCode?: string;
-  role?: 'PERMANENT' | 'TEMP_USER' | 'MANAGER' | 'GM' | 'ADMIN';
+  role?: 'PERMANENT' | 'TEMP_USER' | 'MANAGER' | 'GM' | 'HR';
   employee?: Employee;
 }

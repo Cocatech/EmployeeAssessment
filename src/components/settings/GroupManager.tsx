@@ -41,9 +41,7 @@ export function GroupManager({ groups }: GroupManagerProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this group?')) {
-      return;
-    }
+
 
     const result = await deleteGroup(id);
     if (result.success) {

@@ -2,10 +2,11 @@
 
 import { AssessmentQuestion } from "@/types/assessment"
 import { Button } from "@/components/ui/button"
-import { Edit2, Trash2, Power, PowerOff } from "lucide-react"
+import { Edit2, Power, PowerOff } from "lucide-react"
 import { deleteQuestion, toggleQuestionStatus } from "@/actions/questions"
 import { useRouter } from "next/navigation"
-import { AssessmentCategory, AssessmentLevel } from "@prisma/client" // Added AssessmentCategory and AssessmentLevel
+import { AssessmentCategory, AssessmentLevel } from "@prisma/client"
+import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog';
 
 type SerializedAssessmentLevel = Omit<AssessmentLevel, 'createdAt' | 'updatedAt'> & {
     createdAt: string;
@@ -19,10 +20,10 @@ type SerializedAssessmentCategory = Omit<AssessmentCategory, 'createdAt' | 'upda
 
 interface QuestionListTableProps {
     questions: AssessmentQuestion[]
-    levelFilter: string // Added
-    categoryFilter?: string // Added
-    levels: SerializedAssessmentLevel[] // Added
-    categories?: SerializedAssessmentCategory[] // Added
+    levelFilter: string
+    categoryFilter?: string
+    levels: SerializedAssessmentLevel[]
+    categories?: SerializedAssessmentCategory[]
     onEdit: (question: AssessmentQuestion) => void
 }
 
@@ -30,10 +31,8 @@ export function QuestionListTable({ questions, onEdit }: QuestionListTableProps)
     const router = useRouter()
 
     const handleDelete = async (id: string) => {
-        if (confirm("Are you sure you want to delete this question?")) {
-            await deleteQuestion(id)
-            router.refresh()
-        }
+        await deleteQuestion(id)
+        router.refresh()
     }
 
     const handleToggle = async (id: string) => {
@@ -83,13 +82,17 @@ export function QuestionListTable({ questions, onEdit }: QuestionListTableProps)
                                     {q.isActive ? <Power size={16} /> : <PowerOff size={16} />}
                                 </button>
                             </td>
-                            <td className="p-3 text-center space-x-2">
+                            <td className="p-3 text-center space-x-2 flex items-center justify-center">
                                 <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => onEdit(q)}>
                                     <Edit2 size={16} className="text-blue-600" />
                                 </Button>
-                                <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleDelete(q.id)}>
-                                    <Trash2 size={16} className="text-red-500" />
-                                </Button>
+                                <DeleteConfirmationDialog
+                                    title="Delete Question?"
+                                    itemIdentifier={q.questionTitle}
+                                    onConfirm={() => handleDelete(q.id)}
+                                    variant="icon"
+                                    deleteKeyword="DELETE"
+                                />
                             </td>
                         </tr>
                     ))}

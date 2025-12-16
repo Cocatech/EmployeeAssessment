@@ -23,6 +23,7 @@ import {
 } from '@/actions/levels';
 import { Edit2, Trash2, Plus, Power } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog';
 
 type SerializedAssessmentLevel = Omit<AssessmentLevel, 'createdAt' | 'updatedAt'> & {
     createdAt: string;
@@ -182,9 +183,14 @@ export function LevelManager({ initialLevels }: LevelManagerProps) {
                                     <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(level)}>
                                         <Edit2 className="w-4 h-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(level.id)}>
-                                        <Trash2 className="w-4 h-4 text-red-500" />
-                                    </Button>
+                                    <DeleteConfirmationDialog
+                                        title="Delete Level?"
+                                        itemIdentifier={level.label}
+                                        onConfirm={() => handleDelete(level.id)}
+                                        variant="icon"
+                                        deleteKeyword="DELETE"
+                                        description="Deleting a level might affect questions assigned to it. This action cannot be undone."
+                                    />
                                 </TableCell>
                             </TableRow>
                         ))}

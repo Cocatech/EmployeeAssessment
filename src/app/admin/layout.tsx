@@ -8,7 +8,7 @@ export default async function AdminLayout({
 }) {
   // Check authentication
   const session = await auth();
-  
+
   // Redirect to sign in if not authenticated
   if (!session?.user) {
     redirect('/auth/signin');
@@ -18,8 +18,8 @@ export default async function AdminLayout({
   const currentUser = session.user as any;
   const role = currentUser?.role;
   const userType = currentUser?.userType;
-  
-  if (userType !== 'SYSTEM_ADMIN' && role !== 'ADMIN') {
+
+  if (userType !== 'SYSTEM_ADMIN' && role !== 'HR') {
     // Non-admin users redirect to dashboard
     redirect('/dashboard');
   }

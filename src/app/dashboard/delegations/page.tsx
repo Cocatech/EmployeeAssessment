@@ -18,8 +18,8 @@ export default async function DelegationsPage() {
   const currentUser = (session?.user as any);
   const role = currentUser?.role;
   const userType = currentUser?.userType;
-  
-  if (userType !== 'SYSTEM_ADMIN' && role !== 'ADMIN') {
+
+  if (userType !== 'SYSTEM_ADMIN' && role !== 'HR') {
     redirect('/dashboard');
   }
 
@@ -46,7 +46,7 @@ export default async function DelegationsPage() {
     const now = new Date();
     const startDate = new Date(delegation.startDate);
     const endDate = new Date(delegation.endDate);
-    
+
     if (!delegation.isActive) {
       return (
         <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800">
@@ -54,7 +54,7 @@ export default async function DelegationsPage() {
         </span>
       );
     }
-    
+
     if (now < startDate) {
       return (
         <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-800">
@@ -62,7 +62,7 @@ export default async function DelegationsPage() {
         </span>
       );
     }
-    
+
     if (now > endDate) {
       return (
         <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-800">
@@ -70,7 +70,7 @@ export default async function DelegationsPage() {
         </span>
       );
     }
-    
+
     return (
       <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-800">
         Active
@@ -169,7 +169,7 @@ export default async function DelegationsPage() {
       {/* Delegations List */}
       <Card className="p-6">
         <h2 className="text-lg font-semibold mb-4">All Delegations</h2>
-        
+
         {delegations.length === 0 ? (
           <div className="text-center py-12">
             <UserCog className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

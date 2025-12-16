@@ -37,7 +37,7 @@ export default async function AssessmentDetailPage({ params }: Props) {
   const role = currentUserSession?.role;
   const userType = currentUserSession?.userType;
   const currentUserId = currentUserSession?.empCode || '';
-  const isAdmin = userType === 'SYSTEM_ADMIN' || role === 'ADMIN';
+  const isAdmin = userType === 'SYSTEM_ADMIN' || role === 'HR';
 
   // Check if current user is the owner of this assessment
   const isOwner = assessment.employeeId === currentUserId;

@@ -400,7 +400,7 @@ export function EmployeeForm({
                     >
                       <option value="EMPLOYEE">Employee</option>
                       <option value="MANAGER">Manager</option>
-                      <option value="ADMIN">Admin</option>
+                      <option value="HR">HR</option>
                     </select>
                   </div>
                   <div className="space-y-2 w-1/3 min-w-[150px]">
@@ -467,8 +467,8 @@ export function EmployeeForm({
                 >
                   <option value="EMPLOYEE">Employee</option>
                   <option value="MANAGER">Manager</option>
-                  {(currentUser?.role === 'ADMIN' || currentUser?.userType === 'SYSTEM_ADMIN') && (
-                    <option value="ADMIN">Admin</option>
+                  {(currentUser?.role === 'HR' || currentUser?.userType === 'SYSTEM_ADMIN') && (
+                    <option value="HR">HR</option>
                   )}
                 </select>
               </div>

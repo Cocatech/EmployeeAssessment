@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import type { Delegation, DelegationPermission } from '@/types/delegation';
 import { auth } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Get all delegations (Admin only)
@@ -15,7 +16,7 @@ export async function getDelegations(params?: {
 }): Promise<Delegation[]> {
   try {
     const where: any = {};
-    
+
     if (params?.delegateeId) where.delegateeId = params.delegateeId;
     if (params?.permission) where.permission = params.permission;
     if (params?.isActive !== undefined) where.isActive = params.isActive;
@@ -51,7 +52,7 @@ export async function getDelegations(params?: {
 export async function getActiveDelegations(empCode: string): Promise<Delegation[]> {
   try {
     const now = new Date();
-    
+
     const delegations = await prisma.delegation.findMany({
       where: {
         delegateeId: empCode,
@@ -122,25 +123,29 @@ export async function createDelegation(data: {
   reason?: string;
 }) {
   try {
-    // Check if user is admin
-    const session = await auth();
-    const empCode = (session?.user as any)?.empCode || session?.user?.id;
-    
-    if (empCode !== 'EMP999') {
-      return { success: false, error: 'Only admin can create delegations' };
+    // [SECURITY] Check Permissions
+    const isSysAdmin = await import('@/lib/permissions').then(m => m.isSystemAdmin());
+    // Also allow HR (Role=ADMIN) if decided, but design said SYSADMIN or HR Manager. 
+    // For now, adhering to strict SYSADMIN or Admin Role as per "isSystemAdmin()" which checks userType=SYSTEM_ADMIN or role=ADMIN.
+
+    if (!await isSysAdmin) {
+      return { success: false, error: 'Unauthorized: Only Admins can create delegations' };
     }
 
     // Validate dates
     const startDate = new Date(data.startDate);
     const endDate = new Date(data.endDate);
-    
+
     if (endDate <= startDate) {
       return { success: false, error: 'End date must be after start date' };
     }
 
+    const session = await auth();
+    const delegatorId = (session?.user as any)?.empCode || 'SYSTEM';
+
     const delegation = await prisma.delegation.create({
       data: {
-        delegatorId: empCode,
+        delegatorId: delegatorId,
         delegateeId: data.delegateeId,
         permission: data.permission,
         startDate,
@@ -148,6 +153,13 @@ export async function createDelegation(data: {
         reason: data.reason || null,
         isActive: true,
       },
+    });
+
+    // [AUDIT LOG]
+    await logAudit('DELEGATION_GRANT', 'Delegation', delegation.id, {
+      permission: data.permission,
+      delegatee: data.delegateeId,
+      reason: data.reason
     });
 
     revalidatePath('/dashboard/delegations');
@@ -171,16 +183,13 @@ export async function updateDelegation(
   }
 ) {
   try {
-    // Check if user is admin
-    const session = await auth();
-    const empCode = (session?.user as any)?.empCode || session?.user?.id;
-    
-    if (empCode !== 'EMP999') {
-      return { success: false, error: 'Only admin can update delegations' };
+    const isSysAdmin = await import('@/lib/permissions').then(m => m.isSystemAdmin());
+    if (!await isSysAdmin) {
+      return { success: false, error: 'Unauthorized' };
     }
 
     const updateData: any = {};
-    
+
     if (data.startDate !== undefined) updateData.startDate = new Date(data.startDate);
     if (data.endDate !== undefined) updateData.endDate = new Date(data.endDate);
     if (data.reason !== undefined) updateData.reason = data.reason || null;
@@ -190,6 +199,9 @@ export async function updateDelegation(
       where: { id },
       data: updateData,
     });
+
+    // [AUDIT LOG]
+    await logAudit('DELEGATION_UPDATE', 'Delegation', id, updateData);
 
     revalidatePath('/dashboard/delegations');
     return { success: true };
@@ -204,22 +216,25 @@ export async function updateDelegation(
  */
 export async function revokeDelegation(id: string) {
   try {
-    // Check if user is admin
-    const session = await auth();
-    const empCode = (session?.user as any)?.empCode || session?.user?.id;
-    
-    if (empCode !== 'EMP999') {
-      return { success: false, error: 'Only admin can revoke delegations' };
+    const isSysAdmin = await import('@/lib/permissions').then(m => m.isSystemAdmin());
+    if (!await isSysAdmin) {
+      return { success: false, error: 'Unauthorized' };
     }
+
+    const session = await auth();
+    const revokerId = (session?.user as any)?.empCode || 'SYSTEM';
 
     await prisma.delegation.update({
       where: { id },
       data: {
         isActive: false,
         revokedAt: new Date(),
-        revokedBy: empCode,
+        revokedBy: revokerId,
       },
     });
+
+    // [AUDIT LOG]
+    await logAudit('DELEGATION_REVOKE', 'Delegation', id, { revokedBy: revokerId });
 
     revalidatePath('/dashboard/delegations');
     return { success: true };
@@ -234,13 +249,13 @@ export async function revokeDelegation(id: string) {
  */
 export async function deleteDelegation(id: string) {
   try {
-    // Check if user is admin
-    const session = await auth();
-    const empCode = (session?.user as any)?.empCode || session?.user?.id;
-    
-    if (empCode !== 'EMP999') {
-      return { success: false, error: 'Only admin can delete delegations' };
+    const isSysAdmin = await import('@/lib/permissions').then(m => m.isSystemAdmin());
+    if (!await isSysAdmin) {
+      return { success: false, error: 'Unauthorized' };
     }
+
+    // [AUDIT LOG] - Log before delete since ID will be gone
+    await logAudit('DELEGATION_REVOKE', 'Delegation', id, { action: 'DELETE' });
 
     await prisma.delegation.delete({
       where: { id },
@@ -260,7 +275,7 @@ export async function deleteDelegation(id: string) {
 export async function deactivateExpiredDelegations() {
   try {
     const now = new Date();
-    
+
     await prisma.delegation.updateMany({
       where: {
         isActive: true,

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Plus, Edit, Trash2, GripVertical, X, Check } from 'lucide-react';
+import { DeleteConfirmationDialog } from '@/components/ui/delete-confirmation-dialog';
+
 
 interface DraggableItem {
   id: string;
@@ -47,7 +49,7 @@ export function DraggableList({
 
   const handleDragOver = (e: React.DragEvent, targetId: string) => {
     e.preventDefault();
-    
+
     if (!draggedItem || draggedItem === targetId) return;
 
     const draggedIndex = orderedItems.findIndex((item) => item.id === draggedItem);
@@ -96,13 +98,12 @@ export function DraggableList({
           onDragStart={(e) => handleDragStart(e, item.id)}
           onDragOver={(e) => handleDragOver(e, item.id)}
           onDragEnd={handleDragEnd}
-          className={`p-4 cursor-move transition-all ${
-            draggedItem === item.id ? 'opacity-50 scale-95' : 'hover:shadow-md'
-          } ${!item.isActive ? 'bg-gray-50' : ''}`}
+          className={`p-4 cursor-move transition-all ${draggedItem === item.id ? 'opacity-50 scale-95' : 'hover:shadow-md'
+            } ${!item.isActive ? 'bg-gray-50' : ''}`}
         >
           <div className="flex items-center gap-4">
             <GripVertical className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-            
+
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-1 rounded">
@@ -128,13 +129,11 @@ export function DraggableList({
               >
                 <Edit className="h-4 w-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(item.id)}
-              >
-                <Trash2 className="h-4 w-4 text-red-600" />
-              </Button>
+              <DeleteConfirmationDialog
+                title={`Delete ${itemLabel}?`}
+                itemIdentifier={item.name}
+                onConfirm={() => onDelete(item.id)}
+              />
             </div>
           </div>
         </Card>
@@ -199,7 +198,7 @@ export function FormModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       // Only send fields that are enabled
       const submitData: any = {};
@@ -208,7 +207,7 @@ export function FormModal({
       if (fields.description) submitData.description = formData.description;
       if (fields.groupCode && formData.groupCode) submitData.groupCode = formData.groupCode;
       if (fields.isActive !== undefined) submitData.isActive = formData.isActive;
-      
+
       await onSubmit(submitData);
       onClose();
     } catch (error) {
@@ -221,11 +220,11 @@ export function FormModal({
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
       onClick={onClose}
     >
-      <Card 
+      <Card
         className="w-full max-w-md p-6"
         onClick={(e) => e.stopPropagation()}
       >

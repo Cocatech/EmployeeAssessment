@@ -12,7 +12,8 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
-  UserCog
+  UserCog,
+  ShieldAlert
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,8 @@ interface NavItem {
   href: string;
   label: string;
   icon: any;
-  requirePermission?: boolean;
+  requirePermission?: boolean; // General HR permissions
+  requireSysAdmin?: boolean; // [NEW] Strict SYSADMIN only
 }
 
 interface SidebarProps {
@@ -34,6 +36,7 @@ const allNavItems: NavItem[] = [
   { href: '/dashboard/employees', label: 'Employees', icon: Users, requirePermission: true },
   { href: '/dashboard/assessments', label: 'Assessments', icon: ClipboardCheck },
   { href: '/dashboard/delegations', label: 'Delegations', icon: UserCog, requirePermission: true },
+  { href: '/dashboard/audit', label: 'Audit Logs', icon: ShieldAlert, requireSysAdmin: true }, // [NEW]
   { href: '/dashboard/settings', label: 'Settings', icon: Settings, requirePermission: true },
 ];
 
@@ -41,7 +44,7 @@ export function Sidebar({ logoUrl }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const { data: session } = useSession();
-  const [navItems, setNavItems] = useState<NavItem[]>(allNavItems);
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
 
   useEffect(() => {
     // Check permissions
@@ -49,16 +52,18 @@ export function Sidebar({ logoUrl }: SidebarProps) {
       const currentUser = session?.user as any;
       const role = currentUser?.role;
       const userType = currentUser?.userType;
-      const isAdmin = userType === 'SYSTEM_ADMIN' || role === 'ADMIN';
 
-      if (isAdmin) {
-        // Admin sees all menu items
-        setNavItems(allNavItems);
-      } else {
-        // Regular users: hide Employees and Delegations menu
-        const filteredItems = allNavItems.filter(item => !item.requirePermission);
-        setNavItems(filteredItems);
-      }
+      const isSysAdmin = userType === 'SYSTEM_ADMIN';
+      const isAdminOrHr = isSysAdmin || role === 'HR';
+
+      // Filter items based on permissions
+      const filtered = allNavItems.filter(item => {
+        if (item.requireSysAdmin) return isSysAdmin;
+        if (item.requirePermission) return isAdminOrHr;
+        return true;
+      });
+
+      setNavItems(filtered);
     };
 
     if (session) {

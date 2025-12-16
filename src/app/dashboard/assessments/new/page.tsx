@@ -18,7 +18,7 @@ export default async function NewAssessmentPage() {
   }
 
   const currentUser = session.user as any;
-  const empCode = currentUser?.empCode || 'ADMIN';
+  const empCode = currentUser?.empCode || 'HR';
 
   // Fetch assessment types and levels from database
   const [assessmentTypes, levels] = await Promise.all([

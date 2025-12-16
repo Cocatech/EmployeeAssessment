@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 /**
  * Helper to get current user
@@ -62,10 +63,9 @@ export async function createAssessmentCategory(data: {
 }): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        // TODO: Restore admin check
-        // if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
-        //   return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+            return { success: false, error: 'Unauthorized' };
+        }
 
         const existing = await prisma.assessmentCategory.findUnique({
             where: { name: data.name },
@@ -75,11 +75,15 @@ export async function createAssessmentCategory(data: {
             return { success: false, error: 'Category name already exists' };
         }
 
-        await prisma.assessmentCategory.create({
+        const result = await prisma.assessmentCategory.create({
             data,
         });
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        await logAudit('CATEGORY_CREATE', 'AssessmentCategory', result.id, { name: data.name });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to create assessment category:', error);
@@ -106,9 +110,9 @@ export async function updateAssessmentCategory(
 ): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        // if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
-        //   return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+            return { success: false, error: 'Unauthorized' };
+        }
 
         const currentCategory = await prisma.assessmentCategory.findUnique({
             where: { id },
@@ -148,6 +152,10 @@ export async function updateAssessmentCategory(
         }
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        await logAudit('CATEGORY_UPDATE', 'AssessmentCategory', id, { changes: data });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to update assessment category:', error);
@@ -161,9 +169,9 @@ export async function updateAssessmentCategory(
 export async function deleteAssessmentCategory(id: string): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        // if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
-        //   return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+            return { success: false, error: 'Unauthorized' };
+        }
 
         const category = await prisma.assessmentCategory.findUnique({
             where: { id },
@@ -182,11 +190,17 @@ export async function deleteAssessmentCategory(id: string): Promise<AssessmentCa
             return { success: false, error: `Cannot delete category used by ${usedCount} questions. Please reassign them first.` };
         }
 
+        const target = await prisma.assessmentCategory.findUnique({ where: { id } });
+
         await prisma.assessmentCategory.delete({
             where: { id },
         });
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        if (target) await logAudit('CATEGORY_DELETE', 'AssessmentCategory', id, { name: target.name });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to delete assessment category:', error);
@@ -200,10 +214,9 @@ export async function deleteAssessmentCategory(id: string): Promise<AssessmentCa
 export async function deleteAssessmentCategories(ids: string[]): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        // TODO: Restore admin check
-        // if (!user || (user.role !== 'ADMIN' && user.role !== 'MANAGER')) {
-        //   return { success: false, error: 'Unauthorized' };
-        // }
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+            return { success: false, error: 'Unauthorized' };
+        }
 
         // Sanity Check: Ensure no category is used
         // Get names of categories to be deleted
@@ -230,6 +243,10 @@ export async function deleteAssessmentCategories(ids: string[]): Promise<Assessm
         });
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        await logAudit('CATEGORY_DELETE', 'AssessmentCategory', 'BULK', { count: result.count, names });
+
         return { success: true, data: { count: result.count } };
     } catch (error) {
         console.error('Failed to delete assessment categories:', error);
@@ -256,6 +273,10 @@ export async function toggleAssessmentCategoryStatus(id: string): Promise<Assess
         });
 
         revalidatePath('/dashboard/settings/assessment-questions');
+
+        // [AUDIT LOG]
+        await logAudit('CATEGORY_UPDATE', 'AssessmentCategory', id, { isActive: !category.isActive });
+
         return { success: true };
     } catch (error) {
         console.error('Failed to toggle category status:', error);
