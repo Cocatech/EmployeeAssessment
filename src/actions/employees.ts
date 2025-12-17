@@ -230,6 +230,12 @@ export async function createEmployee(data: Omit<Employee, 'empCode'> & {
       if (data.userRole && !['EMPLOYEE', 'MANAGER'].includes(data.userRole)) {
         return { success: false, error: 'Unauthorized: Invalid Role assignment.' };
       }
+
+      // [SECURITY] Block MD Position creation by non-SysAdmin
+      const isMD = /MD|Managing Director/i.test(data.position);
+      if (isMD) {
+        return { success: false, error: 'Unauthorized: Only System Admin can assign "Managing Director" position.' };
+      }
     }
 
     // 1. Check if Employee already exists (Active or Inactive)
@@ -312,6 +318,22 @@ export async function createEmployee(data: Omit<Employee, 'empCode'> & {
             }
           });
         }
+
+        // [AUTOMATION] Auto-link MD Code if Position is MD
+        if (/MD|Managing Director/i.test(data.position) && isSysAdmin) {
+          await tx.systemSetting.upsert({
+            where: { key: 'md_code' },
+            update: { value: data.empCode },
+            create: {
+              key: 'md_code',
+              value: data.empCode,
+              label: 'Employee Code for Managing Director (Auto-linked)',
+              type: 'text'
+            }
+          });
+        }
+
+        return { id: data.empCode };
       });
 
       revalidatePath('/admin/employees');
@@ -375,6 +397,20 @@ export async function createEmployee(data: Omit<Employee, 'empCode'> & {
         });
       }
 
+      // [AUTOMATION] Auto-link MD Code if Position is MD
+      if (/MD|Managing Director/i.test(data.position) && isSysAdmin) {
+        await tx.systemSetting.upsert({
+          where: { key: 'md_code' },
+          update: { value: data.empCode },
+          create: {
+            key: 'md_code',
+            value: data.empCode,
+            label: 'Employee Code for Managing Director (Auto-linked)',
+            type: 'text'
+          }
+        });
+      }
+
       return newEmployee;
     });
 
@@ -429,6 +465,12 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
       if (data.email && data.email !== targetUser.email) {
         return { success: false, error: 'Security: Cannot change email of active user. Ask System Admin.' };
       }
+
+      // [SECURITY] Helper to check MD Position
+      const isNewPositionMD = data.position && /MD|Managing Director/i.test(data.position);
+      if (isNewPositionMD && !isSysAdmin) {
+        return { success: false, error: 'Unauthorized: Only System Admin can assign "Managing Director" position.' };
+      }
     }
 
     if (data.empName_Eng !== undefined) updateData.empName_Eng = data.empName_Eng;
@@ -464,10 +506,6 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
         if (data.isActive !== undefined) userUpdateData.isActive = data.isActive;
         if (data.empName_Eng !== undefined) userUpdateData.name = data.empName_Eng;
 
-        // Only update if there is a linked user
-        // We can try to update directly, if not found it throws or returns info depending on query
-        // safe way: updateMany (returns count) or findFirst then update
-
         // Check if user exists linked to this empCode
         const user = await tx.user.findFirst({ where: { empCode } });
         if (user) {
@@ -475,12 +513,21 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
             where: { id: user.id },
             data: userUpdateData
           });
-        } else if (data.email) {
-          // Option: Create user if not exists? 
-          // The requirement says "Create Employess -> Get User". 
-          // If updating an employee that doesn't have a user (legacy?), maybe we should create one?
-          // For now, let's just update if exists.
         }
+      }
+
+      // [AUTOMATION] Auto-link MD Code if Position is MD
+      if (data.position && /MD|Managing Director/i.test(data.position) && isSysAdmin) {
+        await tx.systemSetting.upsert({
+          where: { key: 'md_code' },
+          update: { value: empCode },
+          create: {
+            key: 'md_code',
+            value: empCode,
+            label: 'Employee Code for Managing Director (Auto-linked)',
+            type: 'text'
+          }
+        });
       }
     });
 
@@ -499,9 +546,6 @@ export async function updateEmployee(empCode: string, data: Partial<Employee>) {
   }
 }
 
-/**
- * Delete an employee (soft delete)
- */
 /**
  * Delete an employee (soft delete)
  * Also deactivates the linked User account

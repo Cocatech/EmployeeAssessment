@@ -63,7 +63,8 @@ export async function createAssessmentCategory(data: {
 }): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR' && currentUser.role !== 'MANAGER')) {
             return { success: false, error: 'Unauthorized' };
         }
 
@@ -110,7 +111,8 @@ export async function updateAssessmentCategory(
 ): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR' && currentUser.role !== 'MANAGER')) {
             return { success: false, error: 'Unauthorized' };
         }
 
@@ -169,7 +171,8 @@ export async function updateAssessmentCategory(
 export async function deleteAssessmentCategory(id: string): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR' && currentUser.role !== 'MANAGER')) {
             return { success: false, error: 'Unauthorized' };
         }
 
@@ -214,7 +217,8 @@ export async function deleteAssessmentCategory(id: string): Promise<AssessmentCa
 export async function deleteAssessmentCategories(ids: string[]): Promise<AssessmentCategoryResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR' && currentUser.role !== 'MANAGER')) {
             return { success: false, error: 'Unauthorized' };
         }
 

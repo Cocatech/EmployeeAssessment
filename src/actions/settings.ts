@@ -49,6 +49,40 @@ export async function getMDConfig() {
 }
 
 /**
+ * Upload System Logo
+ */
+export async function uploadSystemLogo(formData: FormData) {
+  try {
+    const file = formData.get('logo') as File;
+    if (!file) {
+      return { success: false, error: 'No file provided' };
+    }
+
+    const { writeFile } = await import('fs/promises');
+    const { join } = await import('path');
+
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // Save to public/logo.png
+    const publicDir = join(process.cwd(), 'public');
+    const filePath = join(publicDir, 'logo.png');
+
+    await writeFile(filePath, buffer);
+
+    // Also update logic to ensure directory exists if needed (usually public exists)
+
+    revalidatePath('/admin/settings');
+    await logAudit('SYSTEM_LOGO_UPDATE', 'SystemSetting', 'logo', { filename: 'logo.png' });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error uploading logo:', error);
+    return { success: false, error: 'Failed to upload logo' };
+  }
+}
+
+/**
  * Get all system settings as a dictionary
  */
 export async function getSystemSettings() {

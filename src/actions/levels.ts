@@ -47,7 +47,8 @@ export async function createAssessmentLevel(data: {
 }): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR' && currentUser.role !== 'MANAGER')) {
             return { success: false, error: 'Unauthorized' };
         }
 
@@ -89,7 +90,8 @@ export async function updateAssessmentLevel(
 ): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR' && user.role !== 'MANAGER')) {
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR' && currentUser.role !== 'MANAGER')) {
             return { success: false, error: 'Unauthorized' };
         }
 
@@ -142,7 +144,8 @@ export async function updateAssessmentLevel(
 export async function deleteAssessmentLevel(id: string): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR')) { // Only Admin/HR can delete
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR')) { // Only Admin/HR can delete
             return { success: false, error: 'Unauthorized' };
         }
 
@@ -167,7 +170,8 @@ export async function deleteAssessmentLevel(id: string): Promise<AssessmentLevel
 export async function toggleAssessmentLevelStatus(id: string, isActive: boolean): Promise<AssessmentLevelResult> {
     try {
         const user = await getCurrentUser();
-        if (!user || (user.role !== 'ADMIN' && user.role !== 'HR')) {
+        const currentUser = user as any;
+        if (!currentUser || (currentUser.role !== 'ADMIN' && currentUser.role !== 'HR')) {
             return { success: false, error: 'Unauthorized' };
         }
 

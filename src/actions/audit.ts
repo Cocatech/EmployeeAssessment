@@ -81,6 +81,14 @@ export async function getAuditLogs(params?: {
         console.error('Error fetching audit logs:', error);
         // Return empty array or throw based on UI handling preference. 
         // Here we return empty to avoid breaking page, but could handle error state in UI.
-        return [];
+        return {
+            data: [],
+            metadata: {
+                total: 0,
+                page: 1,
+                limit: 20,
+                totalPages: 0
+            }
+        };
     }
 }

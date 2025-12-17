@@ -26,6 +26,7 @@ export type AuditAction =
     | 'DELEGATION_UPDATE'
     | 'DELEGATION_REVOKE'
     | 'SETTING_UPDATE'
+    | 'SYSTEM_LOGO_UPDATE'
     | 'POSITION_CREATE'
     | 'POSITION_UPDATE'
     | 'POSITION_DELETE'

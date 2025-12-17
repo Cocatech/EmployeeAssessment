@@ -14,6 +14,8 @@ export type AssessmentStatus =
   | 'SUBMITTED_MD'   // New
   | 'FEEDBACK_REQUIRED' // New: Manager must give feedback
   | 'SUBMITTED_GM'   // Legacy/New
+  | 'EMPLOYEE_ACKNOWLEDGE' // Employee confirms feedback
+  | 'FINAL_HR'       // Final HR check
   | 'COMPLETED'
   | 'REJECTED';
 

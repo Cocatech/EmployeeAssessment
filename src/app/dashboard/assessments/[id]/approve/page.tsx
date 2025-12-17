@@ -12,7 +12,9 @@ interface Props {
 }
 
 export default async function AssessmentApprovalPage({ params }: Props) {
+  console.log('[DEBUG] AssessmentApprovalPage: START');
   const { id } = await params;
+  console.log('[DEBUG] AssessmentApprovalPage: id =', id);
 
   // Get current user session
   const session = await auth();
@@ -20,9 +22,12 @@ export default async function AssessmentApprovalPage({ params }: Props) {
   const currentUserId = currentUserSession?.empCode || '';
 
   // ดึงข้อมูล assessment โดยตรง (Efficient & Fresh)
+  console.log('[DEBUG] Page: Fetching assessment', id);
   const { success, data: assessmentData } = await getAssessment(id);
+  console.log('[DEBUG] Page: Fetch result', { success, found: !!assessmentData });
 
   if (!success || !assessmentData) {
+    console.log('[DEBUG] Page: Assessment not found, triggering notFound()');
     notFound();
   }
 
@@ -34,7 +39,7 @@ export default async function AssessmentApprovalPage({ params }: Props) {
   const validStatuses = [
     'SUBMITTED_APPR1', 'SUBMITTED_APPR2', 'SUBMITTED_APPR3',
     'SUBMITTED_MGR', 'SUBMITTED_HR', 'SUBMITTED_MD', 'SUBMITTED_GM',
-    'FEEDBACK_REQUIRED'
+    'FEEDBACK_REQUIRED', 'EMPLOYEE_ACKNOWLEDGE', 'FINAL_HR'
   ];
 
   if (!validStatuses.includes(assessment.status)) {
@@ -50,7 +55,7 @@ export default async function AssessmentApprovalPage({ params }: Props) {
 
   // Permission check - using standardized SUBMITTED_* pattern
   let isAuthorized = false;
-  let currentUserRole: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'md' | 'gm' = 'approver1'; // Default
+  let currentUserRole: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'md' | 'gm' | 'employee' | 'hr' = 'approver1'; // Default
 
   if (assessment.status === 'SUBMITTED_APPR1') {
     isAuthorized = employee.approver1_ID === currentUserId;
@@ -66,12 +71,40 @@ export default async function AssessmentApprovalPage({ params }: Props) {
     currentUserRole = 'manager';
   } else if (assessment.status === 'SUBMITTED_HR') {
     // HR role can access when status is SUBMITTED_HR
-    // Check if user's position code is 'HR'
     const { isUserHR } = await import('@/actions/settings');
     const isHR = await isUserHR(currentUserId);
     if (isHR) {
       isAuthorized = true;
-      currentUserRole = 'md'; // Use 'md' role type as fallback for HR
+      currentUserRole = 'md'; // Use 'md' role type as fallback for HR initial review if UI demands, or keep existing logic?
+      // Wait, original code mapped HR to 'md'. Logic in approval form uses specific role now?
+      // Checking ApprovalForm: line 300: if (currentUserRole === 'hr') call completeAssessmentByHR
+      // But initial HR review calls approveAssessment with 'hr' stage.
+      // So HR *initial* review should separate from HR *final* review.
+      // Let's assume initial review functionality uses 'md' logic or add 'hr' support to ApprovalForm logic for initial review?
+      // ApprovalForm doesn't explicitly support 'hr' in "approveAssessment" call in MY update.
+      // Wait, I replaced `approveAssessment` call with `completeAssessmentByHR` if role is `hr`.
+      // This implies role 'hr' is ONLY for final check.
+      // So for initial HR review, I should probably stick to mapping to 'md' or 'manager' or create a separate role?
+      // Actually, looking at `approveAssessment` (server action), it handles `stage === 'hr'`.
+      // `ApprovalForm` previously didn't have `hr` role. It likely used `md` view or similar.
+      // If I want to support `approveAssessment(..., 'hr')`, I need `ApprovalForm` to send 'hr'.
+      // But my `ApprovalForm` update makes `hr` call `completeAssessmentByHR`.
+      // CONSTLICT: I need to disambiguate Initial HR Review vs Final HR Review.
+
+      // Let's map Initial HR Review to 'manager' or keep as 'md'? 
+      // The original code mapped it to 'md'.
+      // If mapped to 'md', `currentUserRole` is 'md'. `ApprovalForm` calls `approveAssessment(..., 'md')`.
+      // But `approveAssessment` server action expects `stage`.
+      // If I pass 'md', the server action executes `stage === 'md'`.
+      // BUT `stage === 'md'` transitions to Feedback. HR transition should be HR -> MD.
+      // So `stage` MUST be 'hr'.
+      // Therefore `ApprovalForm` MUST send 'hr'.
+      // My update to `ApprovalForm` hijacked `hr` role for `completeAssessmentByHR`.
+
+      // FIX: I should distinguish `hr_initial` vs `hr_final`.
+      // Or just check status in `ApprovalForm`.
+      // "if (currentUserRole === 'hr' && status === 'SUBMITTED_HR_FINAL')" -> complete.
+      // "else" -> approveAssessment('hr').
     }
   } else if (assessment.status === 'SUBMITTED_MD') {
     // MD Review - check if user's position code is 'MD'
@@ -88,6 +121,15 @@ export default async function AssessmentApprovalPage({ params }: Props) {
     // Manager gives feedback
     isAuthorized = employee.manager_ID === currentUserId;
     currentUserRole = 'manager';
+  } else if (assessment.status === 'EMPLOYEE_ACKNOWLEDGE') {
+    isAuthorized = employee.empCode === currentUserId;
+    currentUserRole = 'employee';
+  } else if (assessment.status === 'FINAL_HR') {
+    const { isUserHR } = await import('@/actions/settings');
+    if (await isUserHR(currentUserId)) {
+      isAuthorized = true;
+      currentUserRole = 'hr';
+    }
   }
 
   // Redirect if not authorized

@@ -43,9 +43,8 @@ export async function POST(request: NextRequest) {
 
     // 2. Helper to determine next level
     const determineNextStatus = (currentStatus: string): string => {
-      // Flow: ... -> SUBMITTED_APPR1 -> SUBMITTED_APPR2 -> SUBMITTED_APPR3 -> SUBMITTED_MGR -> SUBMITTED_HR -> SUBMITTED_MD -> COMPLETED
-      // Note: GM step is replaced/integrated into this new flow or specific to customer config. 
-      // We strictly follow the requested Manager -> HR -> MD flow here.
+      // Flow: ... -> SUBMITTED_APPR1 -> SUBMITTED_APPR2 -> SUBMITTED_APPR3 -> SUBMITTED_MGR -> SUBMITTED_GM -> SUBMITTED_HR -> SUBMITTED_MD -> FEEDBACK_REQUIRED -> EMPLOYEE_ACKNOWLEDGE -> FINAL_HR -> COMPLETED
+      // Note: GM step is now between Manager and HR.
 
       // Determine logical next steps based on current status
       switch (currentStatus) {
@@ -62,11 +61,18 @@ export async function POST(request: NextRequest) {
         case 'SUBMITTED_APPR3':
           // Check Manager
           if (employee.manager_ID && employee.manager_ID !== '-') return 'SUBMITTED_MGR';
-          // If no Manager, go to HR
+          // If no Manager, check GM
+          if (employee.gm_ID && employee.gm_ID !== '-') return 'SUBMITTED_GM';
+          // If no GM, go to HR
           return 'SUBMITTED_HR';
 
         case 'SUBMITTED_MGR':
-          // Manager -> HR
+          // Manager -> GM
+          if (employee.gm_ID && employee.gm_ID !== '-') return 'SUBMITTED_GM';
+          return 'SUBMITTED_HR';
+
+        case 'SUBMITTED_GM':
+          // GM -> HR
           return 'SUBMITTED_HR';
 
         case 'SUBMITTED_HR':
@@ -78,11 +84,15 @@ export async function POST(request: NextRequest) {
           return 'FEEDBACK_REQUIRED';
 
         case 'FEEDBACK_REQUIRED':
-          // Manager confirms feedback -> GM
-          return 'SUBMITTED_GM';
+          // Manager confirms feedback -> Employee Acknowledge
+          return 'EMPLOYEE_ACKNOWLEDGE';
 
-        case 'SUBMITTED_GM':
-          // GM -> Completed
+        case 'EMPLOYEE_ACKNOWLEDGE':
+          // Employee confirm -> Final HR
+          return 'FINAL_HR';
+
+        case 'FINAL_HR':
+          // Final HR -> Completed
           return 'COMPLETED';
 
         default:
@@ -132,8 +142,14 @@ export async function POST(request: NextRequest) {
       if (currentStatus === 'SUBMITTED_APPR3') updateData.approver3Date = now;
       if (currentStatus === 'SUBMITTED_MGR') {
         updateData.managerDate = now;
-        updateData.hrStatus = 'Pending'; // HR is next
+        // hrStatus removed here, set when entering HR stage if needed, or by HR action
       }
+
+      if (currentStatus === 'SUBMITTED_GM') {
+        updateData.gmDate = now;
+        updateData.hrStatus = 'Pending'; // Prepare for HR
+      }
+
       if (currentStatus === 'SUBMITTED_HR') {
         updateData.hrDate = now;
         updateData.hrStatus = 'Approved';
@@ -148,10 +164,15 @@ export async function POST(request: NextRequest) {
         updateData.feedbackDate = now;
       }
 
-      if (currentStatus === 'SUBMITTED_GM') {
-        updateData.gmDate = now;
-        updateData.approvedAt = now;
-        updateData.completedAt = now;
+      if (currentStatus === 'EMPLOYEE_ACKNOWLEDGE') {
+        updateData.employeeFeedbackDate = now;
+        updateData.employeeFeedbackStatus = 'Confirmed';
+        updateData.hrFinalStatus = 'Pending';
+      }
+
+      if (currentStatus === 'FINAL_HR') {
+        updateData.hrFinalDate = now;
+        updateData.hrFinalStatus = 'Approved';
       }
 
       if (nextStatus === 'COMPLETED') {

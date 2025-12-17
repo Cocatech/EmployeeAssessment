@@ -95,7 +95,7 @@ export default async function AssessmentDetailPage({ params }: Props) {
       SUBMITTED_APPR2: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'With Approver 2' },
       SUBMITTED_APPR3: { color: 'bg-purple-100 text-purple-800 border-purple-200', label: 'With Approver 3' },
       SUBMITTED_MGR: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'With Manager' },
-      SUBMITTED_GM: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'With MD' },
+      SUBMITTED_GM: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'With GM' },
 
       COMPLETED: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Completed' },
       REJECTED: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Rejected' },
@@ -259,6 +259,26 @@ export default async function AssessmentDetailPage({ params }: Props) {
                 <Button>
                   <CheckCircle className="mr-2 h-4 w-4" />
                   Give Feedback
+                </Button>
+              </Link>
+            )}
+
+            {/* Employee Acknowledge - Employee Action */}
+            {assessment.status === 'EMPLOYEE_ACKNOWLEDGE' && isOwner && (
+              <Link href={`/dashboard/assessments/${id}/approve`}>
+                <Button className="bg-green-600 hover:bg-green-700">
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Acknowledge Feedback
+                </Button>
+              </Link>
+            )}
+
+            {/* Final HR Sign - Only show to HR users */}
+            {assessment.status === 'FINAL_HR' && isCurrentUserHR && (
+              <Link href={`/dashboard/assessments/${id}/approve`}>
+                <Button className="bg-pink-600 hover:bg-pink-700">
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  HR Final Sign
                 </Button>
               </Link>
             )}

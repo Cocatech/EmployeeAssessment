@@ -58,7 +58,7 @@ interface ApprovalFormProps {
   employee: Employee;
   questions: Question[];
   responses: Response[];
-  currentUserRole: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'md' | 'gm';
+  currentUserRole: 'approver1' | 'approver2' | 'approver3' | 'manager' | 'md' | 'gm' | 'employee' | 'hr';
   approver1Id?: string | null;
   approver2Id?: string | null;
   approver3Id?: string | null;
@@ -136,12 +136,11 @@ export default function ApprovalForm({
   const [successMessage, setSuccessMessage] = useState('');
 
   // Role Mappings
-  // Role Mappings
   const scoreField = currentUserRole === 'approver1' ? 'scoreAppr1'
     : currentUserRole === 'approver2' ? 'scoreAppr2'
       : currentUserRole === 'approver3' ? 'scoreAppr3'
         : currentUserRole === 'manager' ? 'scoreMgr'
-          : currentUserRole === 'md' ? 'scoreGm' // MD uses GM score slot or shared
+          : (currentUserRole === 'md' || currentUserRole === 'hr') ? 'scoreGm' // MD/HR uses GM score slot or shared
             : 'scoreGm';
 
   // For Comments, we usually store per-question comments in 'commentApprX', 
@@ -149,7 +148,7 @@ export default function ApprovalForm({
   // We'll keep the response state updated just in case we need per-question comments later,
   // but the UI will focus on scores for the grid + summary text areas.
 
-  const isReviewerOnly = ['manager', 'gm', 'md'].includes(currentUserRole);
+  const isReviewerOnly = ['manager', 'gm', 'md', 'employee', 'hr'].includes(currentUserRole);
 
   const handleScoreChange = (questionId: string, value: string) => {
     if (isReviewerOnly) return;
@@ -190,6 +189,8 @@ export default function ApprovalForm({
     if (currentUserRole === 'approver1' && (!comments.approver1Good || !comments.approver1Improve)) return fail("Please fill in Good Points and Points for Improvement.");
     if (currentUserRole === 'approver2' && (!comments.approver2Good || !comments.approver2Improve)) return fail("Please fill in Good Points and Points for Improvement.");
     if (currentUserRole === 'approver3' && (!comments.approver3Good || !comments.approver3Improve)) return fail("Please fill in Good Points and Points for Improvement.");
+    if (currentUserRole === 'hr' && assessmentStatus === 'SUBMITTED_HR' && (!comments.approver3Good || !comments.approver3Improve)) return fail("Please fill in Good Points and Points for Improvement.");
+
 
     // For MD/GM/Manager, we might enforce notes?
     // if (currentUserRole === 'md' && !comments.approver3Good) ... (mapped logic below)
@@ -249,7 +250,7 @@ export default function ApprovalForm({
       } else if (currentUserRole === 'approver2') {
         updateData.approver2Good = comments.approver2Good;
         updateData.approver2Improve = comments.approver2Improve;
-      } else if (currentUserRole === 'approver3') {
+      } else if (currentUserRole === 'approver3' || (currentUserRole === 'hr' && assessmentStatus === 'SUBMITTED_HR')) {
         updateData.approver3Good = comments.approver3Good;
         updateData.approver3Improve = comments.approver3Improve;
       } else if (['manager', 'md', 'gm'].includes(currentUserRole)) {
@@ -292,19 +293,28 @@ export default function ApprovalForm({
         return;
       }
 
-      // 2. Call Approve Server Action
-      const { approveAssessment } = await import('@/actions/assessments');
+      let res;
+      if (currentUserRole === 'employee') {
+        const { confirmEmployeeFeedback } = await import('@/actions/assessments');
+        res = await confirmEmployeeFeedback(assessmentId);
+      } else if (currentUserRole === 'hr' && assessmentStatus === 'SUBMITTED_HR_FINAL') {
+        const { completeAssessmentByHR } = await import('@/actions/assessments');
+        res = await completeAssessmentByHR(assessmentId, 'Final HR Approval');
+      } else {
+        const { approveAssessment } = await import('@/actions/assessments');
 
-      // Get the appropriate comment/note based on role
-      let note = '';
-      if (currentUserRole === 'approver1') note = comments.approver1Good + '\n' + comments.approver1Improve;
-      else if (currentUserRole === 'approver2') note = comments.approver2Good + '\n' + comments.approver2Improve;
-      else if (currentUserRole === 'approver3') note = comments.approver3Good + '\n' + comments.approver3Improve;
-      else if (currentUserRole === 'manager') note = comments.approver3Good + '\n' + comments.approver3Improve; // Manager shares box
-      else if (currentUserRole === 'md') note = comments.approver3Good + '\n' + comments.approver3Improve; // MD shares box
-      else if (currentUserRole === 'gm') note = comments.approver3Good + '\n' + comments.approver3Improve; // GM shares box
+        // Get the appropriate comment/note based on role
+        let note = '';
+        if (currentUserRole === 'approver1') note = comments.approver1Good + '\n' + comments.approver1Improve;
+        else if (currentUserRole === 'approver2') note = comments.approver2Good + '\n' + comments.approver2Improve;
+        else if (currentUserRole === 'approver3') note = comments.approver3Good + '\n' + comments.approver3Improve;
+        else if (currentUserRole === 'manager') note = comments.approver3Good + '\n' + comments.approver3Improve; // Manager shares box
+        else if (currentUserRole === 'md') note = comments.approver3Good + '\n' + comments.approver3Improve; // MD shares box
+        else if (currentUserRole === 'gm') note = comments.approver3Good + '\n' + comments.approver3Improve; // GM shares box
+        else if (currentUserRole === 'hr') note = comments.approver3Good + '\n' + comments.approver3Improve; // HR reuse shared box for initial review
 
-      const res = await approveAssessment(assessmentId, currentUserRole, note);
+        res = await approveAssessment(assessmentId, currentUserRole as any, note);
+      }
 
       if (res && res.success === false) {
         setError(res.error || 'Failed to approve');
@@ -385,7 +395,7 @@ export default function ApprovalForm({
           </Button>
           <Button onClick={handleApprove} disabled={isSaving || isSubmitting} className="bg-green-600 hover:bg-green-700 text-white">
             <CheckCircle className="mr-2 h-4 w-4" />
-            {isReviewerOnly ? 'Confirm & Proceed' : 'Approve & Submit'}
+            {currentUserRole === 'employee' ? 'Confirm Feedback' : (currentUserRole === 'hr' && assessmentStatus === 'SUBMITTED_HR_FINAL') ? 'Complete Assessment' : isReviewerOnly ? 'Confirm & Proceed' : 'Approve & Submit'}
           </Button>
         </div>
       </div>

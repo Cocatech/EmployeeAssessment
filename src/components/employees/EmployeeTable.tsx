@@ -111,7 +111,7 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
                         <Eye className="h-4 w-4" />
                       </Button>
                     </Link>
-                    <Link href={`/admin/employees/${employee.empCode}/edit?returnUrl=${pathname}`}>
+                    <Link href={`${pathname}/${employee.empCode}/edit?returnUrl=${pathname}`}>
                       <Button variant="ghost" size="sm">
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -202,7 +202,7 @@ export function EmployeeTable({ employees }: EmployeeTableProps) {
                   View
                 </Button>
               </Link>
-              <Link href={`/admin/employees/${employee.empCode}/edit?returnUrl=${pathname}`} className="flex-1">
+              <Link href={`${pathname}/${employee.empCode}/edit?returnUrl=${pathname}`} className="flex-1">
                 <Button variant="outline" size="sm" className="w-full">
                   <Edit className="h-4 w-4 mr-2" />
                   Edit

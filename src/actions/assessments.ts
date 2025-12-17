@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import type { Assessment } from '@/types';
 import { getMDConfig } from './settings';
 import { logAudit } from '@/lib/audit';
+import { auth } from '@/lib/auth';
 
 /**
  * Get all assessments with optional filters
@@ -97,6 +98,10 @@ export async function getAssessmentsPaginated(params?: {
 
     // Role-based Access Control (Row Level Security logic)
     if (params?.viewerId && !params?.isAdmin) {
+      const { getMDConfig } = await import('./settings');
+      const mdCode = await getMDConfig();
+      const isMD = mdCode === params.viewerId;
+
       where.OR = [
         { employeeId: params.viewerId }, // Own assessment
         { assessorId: params.viewerId }, // Is Assessor
@@ -113,6 +118,14 @@ export async function getAssessmentsPaginated(params?: {
           }
         }
       ];
+
+      // If user is MD, they should see assessments pending MD review
+      if (isMD) {
+        where.OR.push({ status: 'SUBMITTED_MD' });
+        where.OR.push({ currentStage: mdCode });
+      }
+
+
     } else if (params?.empCode) {
       // Admin specific filter
       where.employeeId = params.empCode;
@@ -174,6 +187,7 @@ export async function getAssessmentsPaginated(params?: {
       updatedAt: assessment.updatedAt.toISOString(),
       submittedAt: assessment.submittedAt?.toISOString() || undefined,
       approvedAt: assessment.approvedAt?.toISOString() || undefined,
+      currentStage: assessment.currentStage || undefined,
     }));
 
     return {
@@ -196,9 +210,12 @@ export async function getAssessmentsPaginated(params?: {
  */
 export async function getAssessment(id: string) {
   try {
+    console.log('[DEBUG] getAssessment called with ID:', id);
     const assessment = await findAssessmentById(id);
+    console.log('[DEBUG] findAssessmentById result:', assessment ? 'Found' : 'Not Found');
 
     if (!assessment) {
+      console.log('[DEBUG] Assessment not found in DB');
       return { success: false, error: 'Assessment not found' };
     }
 
@@ -1008,17 +1025,31 @@ export async function approveAssessment(
       updateData.managerDate = new Date();
       updateData.managerNote = note;
 
-      // Go to HR (New Flow: Manager -> HR -> MD -> Feedback -> GM)
+      // Manager -> GM
+      if (employee.gm_ID) {
+        nextStage = 'SUBMITTED_GM';
+        nextPerson = employee.gm_ID;
+        updateData.gmStatus = 'Pending';
+      } else {
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
+      }
+
+    } else if (stage === 'gm') {
+      updateData.gmStatus = 'Approved';
+      updateData.gmDate = new Date();
+      updateData.gmNote = note;
+
+      // GM -> HR
       nextStage = 'SUBMITTED_HR';
       updateData.hrStatus = 'Pending';
 
     } else if (stage === 'hr') {
-      // HR Review completed
       updateData.hrStatus = 'Approved';
       updateData.hrDate = new Date();
       updateData.hrNote = note;
 
-      // Go to MD
+      // HR -> MD
       const mdSetting = await prisma.systemSetting.findUnique({ where: { key: 'md_code' } });
       const mdId = mdSetting?.value;
 
@@ -1027,8 +1058,6 @@ export async function approveAssessment(
         nextPerson = mdId;
         updateData.mdStatus = 'Pending';
       } else {
-        // If no MD set, skip to Feedback
-        console.warn('No MD configured in settings, skipping MD stage');
         nextStage = 'FEEDBACK_REQUIRED';
         nextPerson = employee.manager_ID;
       }
@@ -1038,35 +1067,17 @@ export async function approveAssessment(
       updateData.mdDate = new Date();
       updateData.mdNote = note;
 
-      // Go to Feedback (Manager)
+      // MD -> Feedback
       nextStage = 'FEEDBACK_REQUIRED';
       nextPerson = employee.manager_ID;
-      // No status field for feedback, just the stage
 
     } else if (stage === 'feedback') {
-      // Manager confirms feedback
       updateData.feedbackDate = new Date();
 
-      // Go to GM
-      if (employee.gm_ID) {
-        nextStage = 'SUBMITTED_GM';
-        nextPerson = employee.gm_ID;
-        updateData.gmStatus = 'Pending';
-      } else {
-        // No GM - Complete assessment
-        nextStage = 'COMPLETED';
-        updateData.completedAt = new Date();
-      }
-
-    } else if (stage === 'gm') {
-      updateData.gmStatus = 'Approved';
-      updateData.gmDate = new Date();
-      updateData.gmNote = note;
-
-      // Complete
-      nextStage = 'COMPLETED';
-      nextPerson = null;
-      updateData.completedAt = new Date();
+      // Feedback -> Employee Confirm
+      nextStage = 'EMPLOYEE_ACKNOWLEDGE';
+      nextPerson = employee.empCode;
+      updateData.employeeFeedbackStatus = 'Pending';
     }
 
     updateData.status = nextStage;
@@ -1166,9 +1177,13 @@ export async function submitFullAssessment(payload: {
     status: string;
     note: string;
   };
+  gmData?: {
+    status: string;
+    note: string;
+  };
   stage: 'self' | 'approver1' | 'approver2' | 'approver3' | 'manager' | 'hr' | 'md' | 'gm' | 'feedback';
 }) {
-  const { assessmentId, responses, comments, managerData, hrData, stage } = payload;
+  const { assessmentId, responses, comments, managerData, hrData, gmData, stage } = payload;
 
   try {
     const assessment = await prisma.assessment.findUnique({
@@ -1209,6 +1224,10 @@ export async function submitFullAssessment(payload: {
     if (stage === 'hr' && hrData) {
       updateData.hrStatus = hrData.status;
       updateData.hrNote = hrData.note;
+    }
+    if (stage === 'gm' && gmData) {
+      updateData.gmStatus = gmData.status;
+      updateData.gmNote = gmData.note;
     }
 
     // Determine Status Transitions
@@ -1275,15 +1294,42 @@ export async function submitFullAssessment(payload: {
     } else if (stage === 'manager') {
       updateData.managerStatus = 'Approved';
       updateData.managerDate = new Date();
-      nextStage = 'SUBMITTED_HR';
-      updateData.hrStatus = 'Pending';
-      nextPerson = null;
+
+      // Manager -> GM
+      if (employee.gm_ID) {
+        nextStage = 'SUBMITTED_GM';
+        nextPerson = employee.gm_ID;
+        updateData.gmStatus = 'Pending';
+      } else {
+        // No GM -> HR
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
+        nextPerson = null;
+      }
+
+    } else if (stage === 'gm') {
+      if (gmData?.status === 'Rejected') {
+        nextStage = 'REJECTED';
+        updateData.gmDate = new Date();
+        // Reason handled by gmNote above
+      } else {
+        // Default to Approved if not Rejected
+        // updateData.gmStatus = 'Approved'; // Handled by gmData.status above
+        updateData.gmDate = new Date();
+
+        // GM -> HR
+        nextStage = 'SUBMITTED_HR';
+        updateData.hrStatus = 'Pending';
+        nextPerson = null; // HR Queue
+      }
+
     } else if (stage === 'hr') {
-      updateData.hrStatus = 'Approved'; // Or whatever HR set
+      updateData.hrStatus = 'Approved';
       updateData.hrDate = new Date();
 
       const mdSetting = await prisma.systemSetting.findUnique({ where: { key: 'md_code' } });
       const mdId = mdSetting?.value;
+
       if (mdId) {
         nextStage = 'SUBMITTED_MD';
         nextPerson = mdId;
@@ -1292,28 +1338,22 @@ export async function submitFullAssessment(payload: {
         nextStage = 'FEEDBACK_REQUIRED';
         nextPerson = employee.manager_ID;
       }
+
     } else if (stage === 'md') {
       updateData.mdStatus = 'Approved';
       updateData.mdDate = new Date();
+
+      // MD -> Feedback Required
       nextStage = 'FEEDBACK_REQUIRED';
       nextPerson = employee.manager_ID;
+
     } else if (stage === 'feedback') {
       updateData.feedbackDate = new Date();
-      if (employee.gm_ID) {
-        nextStage = 'SUBMITTED_GM';
-        nextPerson = employee.gm_ID;
-        updateData.gmStatus = 'Pending';
-      } else {
-        nextStage = 'COMPLETED';
-        updateData.completedAt = new Date();
-        nextPerson = null;
-      }
-    } else if (stage === 'gm') {
-      updateData.gmStatus = 'Approved';
-      updateData.gmDate = new Date();
-      nextStage = 'COMPLETED';
-      updateData.completedAt = new Date();
-      nextPerson = null;
+
+      // Feedback -> Employee Confirm
+      nextStage = 'EMPLOYEE_ACKNOWLEDGE';
+      nextPerson = employee.empCode;
+      updateData.employeeFeedbackStatus = 'Pending';
     }
 
     updateData.status = nextStage;
@@ -1419,5 +1459,127 @@ export async function submitFullAssessment(payload: {
   } catch (error) {
     console.error('Error in submitFullAssessment:', error);
     return { success: false, error: 'Failed to submit assessment' };
+  }
+}
+
+/**
+ * Confirm Employee Feedback
+ */
+export async function confirmEmployeeFeedback(assessmentId: string) {
+  try {
+    await prisma.assessment.update({
+      where: { id: assessmentId },
+      data: {
+        status: 'FINAL_HR', // Send to Final HR Check
+        hrFinalStatus: 'Pending',
+        employeeFeedbackStatus: 'Confirmed',
+        employeeFeedbackDate: new Date(),
+        updatedAt: new Date(),
+      }
+    });
+
+    revalidatePath(`/dashboard/assessments/${assessmentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error confirming feedback:', error);
+    return { success: false, error: 'Failed to confirm feedback' };
+  }
+}
+
+/**
+ * Sign Assessment by HR (Staff or JM)
+ */
+export async function signAssessmentByHR(assessmentId: string, role: 'STAFF' | 'JM') {
+  try {
+    const session = await auth();
+    const currentUser = session?.user as any;
+    const currentUserId = currentUser?.empCode || 'HR_USER';
+    const signerName = currentUser?.name || currentUserId;
+
+    // 1. Update the specific signature
+    const updateData: any = {};
+    if (role === 'STAFF') {
+      updateData.hrStaffSignature = signerName;
+      updateData.hrStaffDate = new Date();
+    } else {
+      updateData.hrJMSignature = signerName;
+      updateData.hrJMDate = new Date();
+    }
+
+    const updatedAssessment = await prisma.assessment.update({
+      where: { id: assessmentId },
+      data: updateData
+    });
+
+    // 2. Check if both are signed
+    if (updatedAssessment.hrStaffSignature && updatedAssessment.hrJMSignature) {
+      // Both signed, mark as COMPLETED
+      await prisma.assessment.update({
+        where: { id: assessmentId },
+        data: {
+          status: 'COMPLETED',
+          hrFinalStatus: 'Approved',
+          hrFinalDate: new Date(),
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        }
+      });
+
+      // Notify Employee
+      await prisma.notification.create({
+        data: {
+          userId: updatedAssessment.employeeId,
+          type: 'Approved',
+          title: 'Assessment Completed',
+          message: 'Your assessment has been completed by HR.',
+          assessmentId: assessmentId,
+          link: `/dashboard/assessments/${assessmentId}/summary`,
+        },
+      });
+    }
+
+    revalidatePath(`/dashboard/assessments/${assessmentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error signing assessment:', error);
+    return { success: false, error: 'Failed to sign assessment' };
+  }
+}
+
+/**
+ * Complete Assessment by HR (Final) - Preserved for backward compatibility or force complete
+ */
+export async function completeAssessmentByHR(assessmentId: string, note?: string) {
+  try {
+    const assessment = await prisma.assessment.update({
+      where: { id: assessmentId },
+      data: {
+        status: 'COMPLETED',
+        hrFinalStatus: 'Approved',
+        hrFinalDate: new Date(),
+        hrFinalNote: note,
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      }
+    });
+
+    // Notify Employee
+    await prisma.notification.create({
+      data: {
+        userId: assessment.employeeId,
+        type: 'Approved',
+        title: 'Assessment Concluded',
+        message: 'Your assessment process is fully completed.',
+        assessmentId: assessmentId,
+        link: `/dashboard/assessments/${assessmentId}/summary`,
+      }
+    });
+
+    revalidatePath('/dashboard/assessments');
+    revalidatePath(`/dashboard/assessments/${assessmentId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error completing assessment:', error);
+    return { success: false, error: 'Failed to complete assessment' };
   }
 }

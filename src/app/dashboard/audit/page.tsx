@@ -27,7 +27,7 @@ export const metadata = {
 export default async function AuditLogsPage({
     searchParams,
 }: {
-    searchParams: { q?: string; action?: string; page?: string };
+    searchParams: Promise<{ q?: string; action?: string; page?: string }>;
 }) {
     const session = await auth();
     if (!session?.user) redirect('/auth/signin');
@@ -37,8 +37,9 @@ export default async function AuditLogsPage({
         redirect('/dashboard');
     }
 
-    const query = searchParams.q || '';
-    const page = Number(searchParams.page) || 1;
+    const params = await searchParams;
+    const query = params.q || '';
+    const page = Number(params.page) || 1;
     const limit = 20;
 
     const { data: logs, metadata } = await getAuditLogs({

@@ -47,6 +47,8 @@ interface ScoringPageProps {
   existingResponses: any[];
 }
 
+import { useSession } from 'next-auth/react';
+
 export default function ScoringForm({
   assessment,
   employee,
@@ -54,6 +56,10 @@ export default function ScoringForm({
   existingResponses
 }: ScoringPageProps) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const currentUser = session?.user as any;
+  const isOwner = currentUser?.empCode === assessment.empCode;
+
   const [responses, setResponses] = useState<Record<string, Response>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,16 +94,24 @@ export default function ScoringForm({
 
   const [gmData, setGmData] = useState({
     status: assessment.gmStatus || '',
-    note: assessment.gmNote || '',
+    note: assessment.gmNote || ''
   });
 
   const [mdData, setMdData] = useState({
     status: assessment.mdStatus || '',
-    note: assessment.mdNote || '',
-  });
-
+    note: assessment.mdNote
+  }); // Feedback Confirm State
+  const [feedbackConfirmed, setFeedbackConfirmed] = useState(!!assessment.employeeFeedbackDate); // New state for Feedback Checkbox
   const [showFeedbackConfirm, setShowFeedbackConfirm] = useState(false);
   const [feedbackDate, setFeedbackDate] = useState(assessment.feedbackDate || null);
+  const [gmAcknowledged, setGmAcknowledged] = useState(false);
+
+  // Final HR Data
+  const [hrFinalData, setHrFinalData] = useState({
+    status: assessment.hrFinalStatus || '',
+    note: assessment.hrFinalNote || '',
+  });
+  const [isFinalClosing, setIsFinalClosing] = useState(false);
 
   // Sync state with props (Fix for stale state on refresh)
   useEffect(() => {
@@ -110,9 +124,9 @@ export default function ScoringForm({
   const isApprover2 = assessment.status === 'SUBMITTED_APPR2';
   const isApprover3 = assessment.status === 'SUBMITTED_APPR3'; // Final Evaluator
   const isManager = assessment.status === 'SUBMITTED_MGR';
-  const isHR = assessment.status === 'SUBMITTED_HR';
+  const isHR = assessment.status === 'SUBMITTED_HR' || assessment.status === 'FINAL_HR';
   const isMD = assessment.status === 'SUBMITTED_MD';
-  const isFeedback = assessment.status === 'FEEDBACK_REQUIRED';
+  const isFeedback = assessment.status === 'FEEDBACK_REQUIRED' || assessment.status === 'EMPLOYEE_ACKNOWLEDGE';
   const isGM = assessment.status === 'SUBMITTED_GM';
 
   // Check draft status
@@ -267,6 +281,10 @@ export default function ScoringForm({
       updateData.hrStatus = hrData.status;
       updateData.hrNote = hrData.note;
     }
+    if (isGM) {
+      updateData.gmStatus = gmData.status;
+      updateData.gmNote = gmData.note;
+    }
 
     if (Object.keys(updateData).length > 0) {
       const { updateAssessment } = await import('@/actions/assessments');
@@ -339,12 +357,37 @@ export default function ScoringForm({
         setError('Please provide a reason.');
         return;
       }
+
+    }
+
+    // Validate Feedback Stage
+    if (isFeedback) {
+      if (!feedbackConfirmed) {
+        setError('Please acknowledge that the feedback feedback session has been conducted.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
     setError('');
 
     try {
+      // Special handling for Employee Acknowledge
+      if (assessment.status === 'EMPLOYEE_ACKNOWLEDGE') {
+        const { confirmEmployeeFeedback } = await import('@/actions/assessments');
+        const result = await confirmEmployeeFeedback(assessment.id);
+
+        if (result.success) {
+          router.push(`/dashboard/assessments/${assessment.id}?submitted=true`);
+          router.refresh();
+          return;
+        } else {
+          setError(result.error || 'Failed to acknowledge');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       // Determine Stage
       let stage: 'self' | 'approver1' | 'approver2' | 'approver3' | 'manager' | 'hr' | 'md' | 'gm' | 'feedback' = 'self';
       if (isApprover1) stage = 'approver1';
@@ -354,7 +397,7 @@ export default function ScoringForm({
       else if (isHR) stage = 'hr';
       else if (isMD) stage = 'md';
       else if (isGM) stage = 'gm';
-      else if (isFeedback) stage = 'feedback';
+      else if (isFeedback) stage = 'feedback'; // This handles the Manager's output to Feedback
 
       // Prepare Payload
       const payload = {
@@ -377,6 +420,7 @@ export default function ScoringForm({
         },
         managerData,
         hrData,
+        gmData,
         stage: stage
       };
 
@@ -1044,77 +1088,99 @@ export default function ScoringForm({
           )}
 
           {/* Feedback & GM Section */}
-          {(assessment.status === 'FEEDBACK_REQUIRED' || assessment.status === 'SUBMITTED_GM' || assessment.status === 'COMPLETED') && (
+          {(assessment.status === 'FEEDBACK_REQUIRED' || assessment.status === 'SUBMITTED_GM' || assessment.status === 'COMPLETED' || assessment.status === 'EMPLOYEE_ACKNOWLEDGE' || assessment.status === 'FINAL_HR' || assessment.status === 'REJECTED') && (
             <div className="mt-4 flex flex-col md:flex-row gap-4">
               {/* Feedback Section */}
               <div className="flex-1 border-2 border-black p-2">
-                <div className="font-bold mb-2 text-center bg-slate-100 p-1">Feedback Session (Manager)</div>
+                <div className="font-bold mb-2 text-center bg-slate-100 p-1">Feedback Session</div>
                 <div className="flex flex-col items-center justify-center h-full min-h-[100px] gap-4">
-                  <div className="text-sm">
-                    Has the feedback interview been conducted?
-                  </div>
-                  {assessment.feedbackDate ? (
-                    <div className="text-green-600 font-bold">
-                      Confirmed on {formatDate(assessment.feedbackDate)}
+                  {/* Manager Confirmation Interaction */}
+                  <div className="flex flex-col gap-2 w-full px-4">
+                    {/* Manager Checkbox */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!assessment.feedbackDate}
+                        disabled={
+                          // Disabled if already done OR if not authorized
+                          !!assessment.feedbackDate ||
+                          (assessment.status !== 'FEEDBACK_REQUIRED' && !assessment.feedbackDate) ||
+                          (currentUser?.empCode !== employee.manager_ID && !currentUser?.isAdmin)
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) setShowFeedbackConfirm(true);
+                        }}
+                        className="h-4 w-4"
+                      />
+                      <span>Manager Confirms Feedback (ผู้จัดการยืนยันการแจ้งผล)</span>
                     </div>
-                  ) : (
-                    <Button
-                      disabled={!isFeedback}
-                      onClick={() => setShowFeedbackConfirm(true)}
-                      className="bg-blue-600 text-white"
-                    >
-                      Confirm Feedback Given
-                    </Button>
+
+                    {/* Manager Date Display */}
+                    {assessment.feedbackDate && (
+                      <div className="ml-6 text-xs text-green-600 font-bold">
+                        Confirmed on: {formatDate(assessment.feedbackDate)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Employee Acknowledge Checkbox */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={feedbackConfirmed}
+                      onChange={(e) => setFeedbackConfirmed(e.target.checked)}
+                      disabled={
+                        // Disable if: 
+                        // 1. Not in Employee Acknowledge stage (unless viewing history)
+                        // 2. Already confirmed by employee
+                        // 3. Current user is not the employee (handled by isFeedback logic mostly, but explicit check good)
+                        assessment.status !== 'EMPLOYEE_ACKNOWLEDGE' ||
+                        !!assessment.employeeFeedbackDate ||
+                        assessment.status === 'FINAL_HR' ||
+                        assessment.status === 'COMPLETED'
+                      }
+                      className="h-4 w-4"
+                    />
+                    <span>Employee Acknowledge (พนักงานรับทราบ)</span>
+                  </div>
+
+                  {assessment.employeeFeedbackDate && (
+                    <div className="mt-2 text-green-600 font-bold text-sm">
+                      Bounded on {formatDate(assessment.employeeFeedbackDate)}
+                    </div>
                   )}
                 </div>
               </div>
 
               {/* GM Section */}
               <div className="flex-1 border-2 border-black p-2">
-                <div className="font-bold mb-2 text-center bg-slate-100 p-1">Confirmed by GM</div>
+                <div className="font-bold mb-2 text-center bg-slate-100 p-1">
+                  Approved by GM
+                  <span className="text-[10px] text-red-500 ml-2 block">(Debug: St="{assessment.gmStatus || 'null'}" Dt={assessment.gmDate ? 'Yes' : 'No'})</span>
+                </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <input type="checkbox" checked={assessment.status === 'COMPLETED' || assessment.gmDate} disabled />
-                    <span>Acknowledged / Approved</span>
-                  </div>
-
-                  <div>
-                    <div className="text-[10px] font-bold">GM Note:</div>
-                    <textarea
-                      className="w-full h-[40px] border border-slate-300 text-xs p-1"
-                      disabled={!isGM}
-                      value={gmData.note}
-                      onChange={(e) => setGmData(prev => ({ ...prev, note: e.target.value }))}
+                    <input
+                      type="checkbox"
+                      checked={gmData.status === 'Approved' || assessment.status === 'APPROVED' || !!assessment.gmDate}
+                      disabled={!isGM || isSaving}
+                      onChange={() => isGM && setGmData(prev => ({ ...prev, status: 'Approved' }))}
+                      className="w-4 h-4"
                     />
+                    <span>Approved (อนุมัติ)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={gmData.status === 'Rejected'}
+                      disabled={!isGM || isSaving}
+                      onChange={() => isGM && setGmData(prev => ({ ...prev, status: 'Rejected' }))}
+                      className="w-4 h-4"
+                    />
+                    <span>Rejected (ไม่อนุมัติ)</span>
                   </div>
 
-                  {isGM && !assessment.gmDate && (
-                    <Button
-                      className="w-full mt-2 bg-green-600 text-white h-8 text-xs"
-                      disabled={isSaving}
-                      onClick={async () => {
-                        try {
-                          setIsSaving(true);
-                          // First save note if needed (omitted for brevity, ideally save before approve)
-
-                          const res = await fetch('/api/assessment/approve', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ assessmentId: assessment.id, action: 'approve' }),
-                          });
-
-                          if (res.ok) {
-                            router.refresh();
-                            window.location.reload();
-                          }
-                        } catch (e) { alert('Error'); } finally { setIsSaving(false); }
-                      }}
-                    >
-                      Confirm & Complete
-                    </Button>
-                  )}
-
-                  <div className="mt-4 text-center">
+                  <div className="mt-12 text-center">
                     <div className="border-b border-black h-8 text-right pr-2 italic text-[10px]">
                       {assessment.gmDate ? formatDate(assessment.gmDate) : ''}
                     </div>
@@ -1128,12 +1194,153 @@ export default function ScoringForm({
         </div>
       </div>
 
+
+      {/* Final HR Verification Section */}
+      {(assessment.status === 'FINAL_HR' || assessment.status === 'COMPLETED') && (
+        <div className="bg-white p-8 mx-auto max-w-[210mm] mt-8 shadow-lg text-xs text-black font-sans border-2 border-slate-800">
+          <div className="font-bold text-lg mb-4 border-b border-slate-800 pb-2 bg-slate-100 p-2 text-center">
+            Final HR Verification (การตรวจสอบขั้นสุดท้าย)
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block font-bold mb-1">Final Note / Comments:</label>
+              <textarea
+                className="w-full h-20 border border-slate-300 p-2 text-xs"
+                placeholder="Enter final comments..."
+                value={hrFinalData.note}
+                onChange={(e) => setHrFinalData(prev => ({ ...prev, note: e.target.value }))}
+                disabled={assessment.status === 'COMPLETED' || isFinalClosing}
+              />
+            </div>
+
+            {/* Dual Signature Section */}
+            <div className="flex flex-col md:flex-row border border-black mt-4">
+              {/* HR Staff Column */}
+              <div className="flex-1 border-b md:border-b-0 md:border-r border-black p-4 flex flex-col items-center">
+                <div className="font-bold mb-4 w-full text-center border-b border-gray-300 pb-2">Kept by HR Staff</div>
+                <div className="flex-1 flex flex-col items-center justify-center min-h-[60px] w-full">
+                  {(assessment as any).hrStaffSignature ? (
+                    <div className="text-center">
+                      <div className="text-green-700 font-bold font-serif italic text-xl mb-1">{(assessment as any).hrStaffSignature}</div>
+                      <div className="text-[10px] text-gray-500">
+                        {formatDate((assessment as any).hrStaffDate)}
+                      </div>
+                    </div>
+                  ) : (
+                    assessment.status === 'FINAL_HR' && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="bg-slate-700 hover:bg-slate-800"
+                        disabled={!isHR || isFinalClosing}
+                        onClick={async () => {
+                          if (!confirm('Sign as HR Staff?')) return;
+                          setIsFinalClosing(true);
+                          try {
+                            const { signAssessmentByHR } = await import('@/actions/assessments');
+                            const res = await signAssessmentByHR(assessment.id, 'STAFF');
+                            if (res.success) {
+                              window.location.reload();
+                            } else {
+                              alert('Failed: ' + res.error);
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          } finally {
+                            setIsFinalClosing(false);
+                          }
+                        }}
+                      >
+                        Sign as HR Staff
+                      </Button>
+                    )
+                  )}
+                </div>
+              </div>
+
+              {/* HR Manager Column */}
+              <div className="flex-1 p-4 flex flex-col items-center">
+                <div className="font-bold mb-4 w-full text-center border-b border-gray-300 pb-2">Kept by HR Manager</div>
+                <div className="flex-1 flex flex-col items-center justify-center min-h-[60px] w-full">
+                  {(assessment as any).hrJMSignature ? (
+                    <div className="text-center">
+                      <div className="text-green-700 font-bold font-serif italic text-xl mb-1">{(assessment as any).hrJMSignature}</div>
+                      <div className="text-[10px] text-gray-500">
+                        {formatDate((assessment as any).hrJMDate)}
+                      </div>
+                    </div>
+                  ) : (
+                    assessment.status === 'FINAL_HR' && (
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="bg-slate-700 hover:bg-slate-800"
+                        disabled={!isHR || isFinalClosing} // Ideally check for Manager role but generic HR allowed for now
+                        onClick={async () => {
+                          if (!confirm('Sign as HR Manager?')) return;
+                          setIsFinalClosing(true);
+                          try {
+                            const { signAssessmentByHR } = await import('@/actions/assessments');
+                            const res = await signAssessmentByHR(assessment.id, 'JM');
+                            if (res.success) {
+                              window.location.reload();
+                            } else {
+                              alert('Failed: ' + res.error);
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          } finally {
+                            setIsFinalClosing(false);
+                          }
+                        }}
+                      >
+                        Sign as HR Manager
+                      </Button>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {assessment.status === 'COMPLETED' && (
+              <div className="text-center text-green-700 font-bold mt-2">
+                Completed on {formatDate(assessment.completedAt || assessment.hrFinalDate)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Employee Acknowledgement Section */}
+      {
+        assessment.status === 'EMPLOYEE_ACKNOWLEDGE' && isOwner && (
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg flex justify-between items-center z-50">
+            <div className="text-sm font-medium">
+              Please acknowledge that you have received feedback from your manager.
+            </div>
+            <Button
+              onClick={() => setShowFeedbackConfirm(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Acknowledge Feedback
+            </Button>
+          </div>
+        )
+      }
+
+      {/* Re-use existing dialog but change text if Employee */}
       <Dialog open={showFeedbackConfirm} onOpenChange={setShowFeedbackConfirm}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Feedback Session</DialogTitle>
+            <DialogTitle>{isOwner ? 'Acknowledge Feedback' : 'Confirm Feedback Session'}</DialogTitle>
             <DialogDescription>
-              Please confirm that you have conducted the feedback interview with the employee. (Status: {assessment.status})
+              {isOwner
+                ? 'I confirm that I have received feedback regarding this assessment.'
+                : `Please confirm that you have conducted the feedback interview with the employee. (Status: ${assessment.status})`
+              }
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1144,11 +1351,22 @@ export default function ScoringForm({
               onClick={async () => {
                 try {
                   setIsSaving(true);
-                  const res = await fetch('/api/assessment/approve', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ assessmentId: assessment.id, action: 'approve' }),
-                  });
+                  // Different API/Action based on who is confirming
+                  let res;
+                  if (assessment.status === 'EMPLOYEE_ACKNOWLEDGE') {
+                    // Employee Action
+                    const { confirmEmployeeFeedback } = await import('@/actions/assessments');
+                    const result = await confirmEmployeeFeedback(assessment.id);
+                    if (!result.success) throw new Error(result.error);
+                    res = { ok: true };
+                  } else {
+                    // Manager Action (Existing)
+                    res = await fetch('/api/assessment/approve', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ assessmentId: assessment.id, action: 'approve' }),
+                    });
+                  }
 
                   if (!res.ok) throw new Error('Failed');
 
@@ -1168,6 +1386,7 @@ export default function ScoringForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div >
   );
 }

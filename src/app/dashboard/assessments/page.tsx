@@ -122,6 +122,9 @@ export default async function DashboardAssessmentsPage({
       SUBMITTED_HR: { color: 'bg-pink-100 text-pink-800', icon: Clock },
       SUBMITTED_MD: { color: 'bg-indigo-100 text-indigo-800', icon: Clock },
       SUBMITTED_GM: { color: 'bg-cyan-100 text-cyan-800', icon: Clock },
+      FEEDBACK_REQUIRED: { color: 'bg-rose-100 text-rose-800', icon: Clock },
+      EMPLOYEE_ACKNOWLEDGE: { color: 'bg-indigo-100 text-indigo-800', icon: Clock },
+      FINAL_HR: { color: 'bg-pink-100 text-pink-800', icon: Clock },
 
       COMPLETED: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
       REJECTED: { color: 'bg-red-100 text-red-800', icon: XCircle },
@@ -236,7 +239,7 @@ export default async function DashboardAssessmentsPage({
                 key={assessment.id}
                 className={`flex items-center justify-between p-4 border rounded-lg transition-colors
                   ${assessment.isPendingMyAction
-                    ? 'ring-2 ring-orange-400 bg-orange-50 hover:bg-orange-100'
+                    ? 'ring-2 ring-blue-400 bg-blue-50/50 hover:bg-blue-50'
                     : 'hover:bg-muted/50'}`}
               >
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
@@ -274,8 +277,12 @@ export default async function DashboardAssessmentsPage({
                       )}
                       {assessment.isPendingMyAction && (
                         <Link href={`/dashboard/assessments/${assessment.id}/approve`}>
-                          <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
-                            Approve
+                          <Button size="sm" className={
+                            assessment.status === 'EMPLOYEE_ACKNOWLEDGE'
+                              ? "bg-green-600 hover:bg-green-700 text-white"
+                              : "bg-blue-600 hover:bg-blue-700 text-white"
+                          }>
+                            {assessment.status === 'EMPLOYEE_ACKNOWLEDGE' ? 'Acknowledge' : 'Action'}
                           </Button>
                         </Link>
                       )}

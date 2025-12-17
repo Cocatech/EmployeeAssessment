@@ -140,6 +140,21 @@ model Assessment {
   gmDate          DateTime?
   gmNote          String? @db.Text
   
+  // Employee Feedback Confirmation
+  employeeFeedbackStatus String? // Confirmed
+  employeeFeedbackDate   DateTime?
+
+  // Final HR Check
+  hrFinalStatus    String? // Approved
+  hrFinalDate      DateTime?
+  hrFinalNote      String? @db.Text
+  
+  // Dual Signature for Final HR
+  hrStaffSignature String?
+  hrStaffDate      DateTime?
+  hrJMSignature    String?
+  hrJMDate         DateTime?
+  
   // Scores
   score           Float?   // Current/interim score
   finalScore      Float?   // Final approved score
